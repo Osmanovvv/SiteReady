@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLAN.md — SiteReady</title>
+<style>
+  :root{
+    --page:#f4f3ee; --card:#ffffff; --ink:#1b1b19; --ink2:#67665f; --ink3:#9b998f;
+    --line:rgba(0,0,0,.12); --line2:rgba(0,0,0,.18);
+    --code-bg:#efeee8;
+    --crit-bg:#FCEBEB; --crit-fg:#A32D2D;
+    --warn-bg:#FAEEDA; --warn-fg:#854F0B;
+    --info-bg:#E6F1FB; --info-fg:#185FA5;
+    --ok-bg:#EAF3DE; --ok-fg:#3B6D11;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --page:#1c1b19; --card:#242320; --ink:#ececea; --ink2:#a9a79e; --ink3:#76746c;
+      --line:rgba(255,255,255,.13); --line2:rgba(255,255,255,.2);
+      --code-bg:#2e2d29;
+      --crit-bg:#501313; --crit-fg:#F09595;
+      --warn-bg:#412402; --warn-fg:#FAC775;
+      --info-bg:#042C53; --info-fg:#85B7EB;
+      --ok-bg:#173404; --ok-fg:#C0DD97;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans);
+       line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:0 auto;padding:32px 18px 80px}
+  .win{background:var(--card);border:.5px solid var(--line2);border-radius:14px;overflow:hidden}
+  .winbar{display:flex;align-items:center;gap:8px;padding:11px 16px;
+          background:rgba(0,0,0,.025);border-bottom:.5px solid var(--line)}
+  @media (prefers-color-scheme: dark){.winbar{background:rgba(255,255,255,.03)}}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .winttl{font-family:var(--mono);font-size:13px;color:var(--ink2);margin-left:6px}
+  .doc{padding:8px 28px 28px}
+  .lead{font-size:14.5px;color:var(--ink2)}
+  .lead b{font-weight:500;color:var(--ink)}
+  h1{font-size:23px;font-weight:500;margin:1.2rem 0 .2rem}
+  h2{font-size:18.5px;font-weight:500;margin:1.7rem 0 .5rem}
+  h3{font-size:15px;font-weight:500;color:var(--ink2);margin:1rem 0 .35rem}
+  p{font-size:14px;margin:.45rem 0}
+  ul{margin:.4rem 0;padding-left:1.25rem}
+  li{font-size:14px;margin:.28rem 0}
+  b{font-weight:500}
+  code{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);
+       padding:1px 5px;border-radius:4px}
+  .tree{font-family:var(--mono);font-size:12px;line-height:1.6;white-space:pre;
+        overflow-x:auto;background:rgba(0,0,0,.03);color:var(--ink2);
+        border-radius:8px;padding:14px 16px}
+  @media (prefers-color-scheme: dark){.tree{background:rgba(255,255,255,.04)}}
+  .chip{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;
+        font-weight:500;white-space:nowrap}
+  .crit{background:var(--crit-bg);color:var(--crit-fg)}
+  .warn{background:var(--warn-bg);color:var(--warn-fg)}
+  .info{background:var(--info-bg);color:var(--info-fg)}
+  .ok{background:var(--ok-bg);color:var(--ok-fg)}
+  .tag{display:inline-block;font-size:10.5px;padding:0 7px;border-radius:5px;
+       background:var(--ok-bg);color:var(--ok-fg);margin-left:6px;vertical-align:1px}
+  hr{border:none;border-top:.5px solid var(--line);margin:1.5rem 0}
+  .note{font-size:13.5px;color:var(--ink2);border-left:2px solid var(--line2);
+        padding-left:12px;margin:.6rem 0}
+  .chk{list-style:none;padding-left:0}
+  .chk li::before{content:"\2610";color:var(--ink3);margin-right:8px}
+  a{color:var(--info-fg)}
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none;padding:0}
+    .win{border:none;border-radius:0}
+    .winbar{display:none}
+    h2{break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="win">
+  <div class="winbar">
+    <span class="dot" style="background:#E24B4A"></span>
+    <span class="dot" style="background:#EF9F27"></span>
+    <span class="dot" style="background:#1D9E75"></span>
+    <span class="winttl">PLAN.md — SiteReady</span>
+  </div>
+  <div class="doc">
+
+  <h1>SiteReady — полный план проекта</h1>
+  <p class="lead"><b>Веб-приложение для проверки сайта «под ключ»:</b> за один прогон обходит весь сайт и выдаёт единый отчёт по SEO, техническому QA, производительности, доступности и адаптивности — с оценкой, приоритетами и советами по исправлению.</p>
+
+  <hr>
+  <h2>1 · Цель и определение «100% готово»</h2>
+  <ul>
+    <li>запуск одной командой <code>node server.js</code>, интерфейс в браузере;</li>
+    <li>URL → обход всего сайта с прогрессом в реальном времени;</li>
+    <li>5 категорий проверок, общий балл и буквенная оценка <code>A–F</code>;</li>
+    <li>проблемы сгруппированы по категориям и приоритету, с советом «как починить»;</li>
+    <li>постраничная таблица результатов;</li>
+    <li>два режима: «Быстрый вид» и «Клиентский отчёт»;</li>
+    <li>экспорт отчёта в PDF (печать) и автономный HTML;</li>
+    <li>автотест на локальном сайте с заложенными ошибками; README; устойчивость к таймаутам и редиректам.</li>
+  </ul>
+
+  <h2>2 · Технические решения</h2>
+  <ul>
+    <li><b>Чистый Node.js, ноль зависимостей</b> — только <code>http</code>, <code>https</code>, <code>zlib</code>, <code>url</code>, <code>fs</code>, <code>path</code>. Нет <code>npm install</code>, нечему ломаться у клиента.</li>
+    <li><b>CommonJS</b> — максимально предсказуемо.</li>
+    <li>Лёгкий HTTP-сервер + статика; прогресс обхода через <b>SSE</b>.</li>
+    <li><b>Статический анализ</b> покрывает ~80%; рендер-зависимое (JS-консоль, контраст, скриншоты) — в «Фазу 2» на Puppeteer.</li>
+  </ul>
+
+  <h2>3 · Архитектура и структура файлов</h2>
+  <div class="tree">site-ready/
+  package.json          без dependencies; start / cli / test
+  server.js             HTTP-сервер: статика + SSE-аудит
+  cli.js                запуск аудита из терминала
+  README.md / PLAN.md
+  src/
+    fetcher.js          запрос: тайминги, редиректы, gzip/br
+    html.js             прощающий токенайзер HTML
+    crawler.js          BFS-обход внутренних ссылок
+    audit.js            оркестратор: обход → проверки → скоринг
+    score.js            веса, расчёт баллов и оценки
+    checks/  seo · tech · performance · accessibility · responsive
+  public/  index.html · app.js · styles.css
+  test/    fixtures/ · serve-fixtures.js · run.js</div>
+
+  <h2>4 · Каталог проверок</h2>
+  <p>Серьёзность: <span class="chip crit">critical</span> чинить обязательно · <span class="chip warn">warning</span> желательно · <span class="chip info">info</span> на заметку.</p>
+
+  <h3>4.1 SEO</h3>
+  <ul>
+    <li>Title: наличие <span class="chip crit">crit</span>, длина 30–60 <span class="chip warn">warn</span>, уникальность <span class="chip warn">warn</span>, не плейсхолдер <span class="chip info">info</span>.</li>
+    <li>Meta description: наличие <span class="chip warn">warn</span>, длина 70–160 <span class="chip info">info</span>, уникальность <span class="chip warn">warn</span>.</li>
+    <li>Ровно один <code>&lt;h1&gt;</code> (0 — <span class="chip crit">crit</span>, &gt;1 — <span class="chip warn">warn</span>); иерархия заголовков <span class="chip info">info</span>.</li>
+    <li><code>canonical</code> <span class="chip warn">warn</span>; <code>robots noindex</code> <span class="chip warn">warn</span>; Open Graph <span class="chip warn">warn</span>; Twitter Card <span class="chip info">info</span>.</li>
+    <li>JSON-LD: наличие <span class="chip info">info</span>, валидность <span class="chip warn">warn</span>; <code>lang</code> у html <span class="chip warn">warn</span>; favicon <span class="chip info">info</span>.</li>
+    <li>Сайт-уровень: <code>robots.txt</code> <span class="chip warn">warn</span>, <code>sitemap.xml</code> + ссылка в robots <span class="chip warn">warn</span>.</li>
+  </ul>
+
+  <h3>4.2 Технические / QA</h3>
+  <ul>
+    <li>Битые внутренние ссылки 4xx/5xx <span class="chip crit">crit</span>; битые картинки <span class="chip crit">crit</span>; не-200 при обходе <span class="chip crit">crit</span>.</li>
+    <li>Битые внешние ссылки <span class="chip warn">warn</span> — различаем реальную битость (<code>404/410</code>, отказ, DNS) и «не удалось проверить» (<code>403/405/429/таймаут</code>, не штрафуем). Реалистичный <code>User-Agent</code>.</li>
+    <li>Mixed content <span class="chip crit">crit</span>; HTTPS <span class="chip crit">crit</span>; редирект http→https <span class="chip warn">warn</span>; цепочки редиректов <span class="chip info">info</span>.</li>
+    <li>Мягкий 404 <span class="chip warn">warn</span>; <code>target=_blank</code> без <code>rel=noopener</code> <span class="chip warn">warn</span>; пустые <code>href</code> <span class="chip info">info</span>.</li>
+  </ul>
+
+  <h3>4.3 Производительность</h3>
+  <ul>
+    <li>TTFB &lt;200 / 200–600 / &gt;600 мс; вес HTML &gt;100/300 КБ; суммарный вес &gt;2/4 МБ.</li>
+    <li>Сжатие gzip/br <span class="chip warn">warn</span>; кэш-заголовки <span class="chip info">info</span>; число запросов &gt;50/100; тяжёлые картинки &gt;200 КБ <span class="chip warn">warn</span>.</li>
+    <li>Картинки без <code>width/height</code> (CLS) <span class="chip warn">warn</span>, без <code>loading=lazy</code> <span class="chip info">info</span>; рендер-блок скрипты в <code>&lt;head&gt;</code> <span class="chip warn">warn</span>.</li>
+  </ul>
+  <p class="note">Метрики скорости — оценочные, с точки замера. Сетенезависимые сигналы (сжатие, вес картинок, кэш, рендер-блок) — достоверны.</p>
+
+  <h3>4.4 Доступность (a11y, статика)</h3>
+  <ul>
+    <li>Картинки без <code>alt</code> <span class="chip crit">crit</span>; нет <code>lang</code> <span class="chip warn">warn</span>; поля форм без <code>label</code> <span class="chip warn">warn</span>.</li>
+    <li>Иконки-кнопки без <code>aria-label</code> <span class="chip warn">warn</span>; <code>user-scalable=no</code> <span class="chip warn">warn</span>; generic-тексты ссылок <span class="chip info">info</span>.</li>
+    <li>Контраст — deep-проверка Фазы 2 (нужен рендер).</li>
+  </ul>
+
+  <h3>4.5 Адаптивность</h3>
+  <ul>
+    <li><code>meta viewport</code> <span class="chip crit">crit</span>; <code>width=device-width</code> <span class="chip warn">warn</span>; <code>@media</code> в CSS <span class="chip warn">warn</span>.</li>
+    <li>Фиксированные большие ширины / широкие таблицы <span class="chip info">info</span>; риск гор. скролла <span class="chip info">info</span> (эвристика).</li>
+  </ul>
+
+  <h2>5 · Движок</h2>
+  <h3>5.1 Fetcher</h3>
+  <p><code>http</code>/<code>https</code> с реалистичным <code>User-Agent</code>: ручные редиректы с цепочкой; TTFB и общее время; декомпрессия gzip/deflate/br через <code>zlib</code> с <b>лимитом размера распакованного тела</b> (анти gzip-бомба). Тело — сырой <code>Buffer</code>, в строку только после определения кодировки. Страницы/CSS — GET; прочее — HEAD→GET.</p>
+  <h3>5.2 Crawler</h3>
+  <p>BFS, только тот же сайт (host + <code>www</code>). Нормализация ссылок (<code>&lt;base&gt;</code>, без <code>#</code>, дедуп, пропуск <code>mailto/tel/js</code>). Лимит страниц 50 (UI больше), параллелизм 5, колбэк прогресса.</p>
+  <h3>5.3 Парсер</h3>
+  <p><b>Не регэксп, а маленький прощающий токенайзер</b> (конечный автомат): комментарии, <code>DOCTYPE</code>, raw-text (<code>script/style/textarea/title</code>), атрибуты в любых кавычках и без, самозакрытие, битая разметка без падения. Снимает главный риск — ложные срабатывания на грязном HTML.</p>
+  <h3>5.4 Достоверность результатов</h3>
+  <ul>
+    <li><b>Кодировки cp1251/koi8-r.</b> Определяем: <code>Content-Type</code> → <code>&lt;meta charset&gt;</code> <b>и старая форма <code>http-equiv</code> Content-Type</b><span class="tag">обновлено</span> → utf-8; декод через <code>TextDecoder</code> (ICU в Node).</li>
+    <li><b>Детект SPA.</b> Контент рисуется в браузере → флаг + честный баннер, а находки «нет h1 / нет alt / тонкий контент» <b>переклассифицируем</b>, а не сыпем ложными critical.</li>
+    <li><b>Классификация ссылок.</b> <code>404/410</code>/отказ/DNS → битая; <code>403/405/429/таймаут</code> → «не проверено», без штрафа.</li>
+    <li><b>Производительность — оценочно.</b> Акцент на сетенезависимом.</li>
+  </ul>
+
+  <h2>6 · Скоринг</h2>
+  <ul>
+    <li>Штраф за находку с потолком на тип. Веса: critical 15, warning 6, info 2.</li>
+    <li>Балл категории = <code>clamp(0, 100 − штраф)</code>.</li>
+    <li>Общий = взвешенное среднее: SEO 0.30 · Тех 0.30 · Перф 0.20 · a11y 0.12 · Адаптив 0.08.</li>
+    <li>Оценка: A ≥90 · B ≥75 · C ≥60 · D ≥40 · F &lt;40.</li>
+  </ul>
+
+  <h2>7 · Backend — server.js</h2>
+  <ul>
+    <li>Слушает <b>только <code>127.0.0.1</code></b> — закрываем SSRF, т.к. бэкенд ходит по произвольным URL.</li>
+    <li><code>GET /</code> → UI; <code>GET /api/audit/stream</code> → SSE: события <code>meta · progress · done · error</code>. Обрыв клиента останавливает обход.</li>
+    <li>Состояние в памяти, без БД.</li>
+  </ul>
+
+  <h2>8 · Frontend — public/</h2>
+  <ul>
+    <li>Ввод: URL, опции (лимит страниц, внешние ссылки, deep — выкл. в v1).</li>
+    <li>Прогресс: полоса, «X из Y», текущий URL, фазы.</li>
+    <li>Дашборд: циферблат балла + оценка, 5 карточек категорий, список проблем с фильтром и советом, постраничная таблица.</li>
+    <li>Переключатель «Быстрый вид / Клиентский отчёт»; кнопки «Скачать PDF / HTML». Весь UI на русском, адаптивный.</li>
+  </ul>
+
+  <h2>9 · Этапы выполнения</h2>
+  <ul>
+    <li>1 · Каркас <span class="chip ok">готово</span></li>
+    <li>2 · Движок: fetcher · html · crawler <span class="chip info">мы здесь</span></li>
+    <li>3 · Проверки + скоринг · 4 · Backend · 5 · Frontend</li>
+    <li>6 · Тест и фиксы · 7 · README и упаковка</li>
+  </ul>
+
+  <h2>10 · Тестирование</h2>
+  <p>Локальный сайт с дефектами <b>+ фикстуры: эталонно-чистая страница<span class="tag">обновлено</span></b>, windows-1251, кривой HTML, заглушка SPA. <code>test/run.js</code> проверяет: каждая ошибка найдена, кодировка читается, SPA детектится, парсер не фонит, на чистой странице находок почти нет, баллы откалиброваны (плохой → D/F, хороший → A/B).</p>
+
+  <h2>11 · Краевые случаи</h2>
+  <p class="lead">Таймауты; циклы редиректов; не-HTML старт; gzip/br с лимитом; кодировки utf-8/1251/koi8-r через <code>TextDecoder</code>; детект SPA; относительные и протокол-относительные URL; <code>&lt;base&gt;</code>; дедуп; <b>вежливость обхода</b> (User-Agent, троттлинг на хост + джиттер, лимиты); <code>robots.txt</code> читается, Disallow — опция (по умолч. выкл.).</p>
+
+  <h2>12 · Дефолты</h2>
+  <p class="lead">maxPages 50 (UI ~300); параллелизм 5 + троттлинг ~150 мс/хост (+джиттер); таймаут 15 c; внешние ссылки лимит 150, таймаут 8 c, HEAD→GET; лимит распаковки ~8 МБ.</p>
+
+  <h2>13 · Поставляемые файлы</h2>
+  <p class="lead">Полный исходник (<code>server.js</code>, <code>src/*</code>, <code>public/*</code>, <code>cli.js</code>), <code>package.json</code>, <code>README.md</code> (RU), <code>PLAN.md</code>, тестовый набор. Готово к <code>node server.js</code>.</p>
+
+  <h2>14 · Ограничения и развитие (v2)</h2>
+  <p class="lead">Не-utf8 декод опирается на полный ICU (стандартный Node ≥13); на <code>small-icu</code> деградирует<span class="tag">обновлено</span>. Deep-модуль на Puppeteer: JS-консоль, контраст через axe-core, скриншоты, Lighthouse. Также: авторизация, история с диффом, мультисайтовый дашборд, white-label, серверный PDF, i18n.</p>
+
+  <h2>15 · Критерии приёмки</h2>
+  <ul class="chk">
+    <li><code>node server.js</code> стартует, UI открывается</li>
+    <li>URL → обход с живым прогрессом; 5 категорий, балл, оценка</li>
+    <li>проблемы сгруппированы; постраничная таблица; 2 режима; экспорт PDF/HTML</li>
+    <li>автотест на фикстурах проходит; README точный; краевые случаи не роняют процесс</li>
+    <li>cp1251 без кракозябр; SPA даёт баннер; парсер не фонит на кривом HTML</li>
+    <li>внешние <code>403/405/429</code> не «битые»; калибровка: плохой → D/F, хороший → A/B</li>
+  </ul>
+
+  </div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "site-ready-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SiteReady audit engine — pure Node.js, zero runtime dependencies",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "cli": "node cli.js",
+    "test": "node test/run.js"
+  }
+}

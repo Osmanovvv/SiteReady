@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тестовая страница SiteReady</title>
+  <meta name="description" content="Демо-страница для тестов движка SiteReady.">
+  <link rel="canonical" href="/index.html">
+  <link rel="stylesheet" href="/style.css">
+  <script type="application/ld+json">
+  { "@context": "https://schema.org", "@type": "Article", "headline": "Тест" }
+  </script>
+</head>
+<body>
+  <h1 id="main">Главная страница</h1>
+  <p>Немного осмысленного текста, чтобы страница не выглядела как пустой SPA-каркас.</p>
+  <nav>
+    <a href="/about.html">О нас</a>
+    <a href="/missing-page">Битая внутренняя ссылка</a>
+    <a href="https://example.com/external">Внешняя ссылка</a>
+    <a href="#section">Якорь на этой странице</a>
+    <a href="mailto:test@example.com">Написать нам</a>
+  </nav>
+  <img src="/img/with-alt.png" alt="Картинка с alt" width="100" height="100">
+  <img src="/img/no-alt.png">
+  <div id="main">Намеренно дублирующийся id</div>
+  <script>
+    var a = 1, b = 2;
+    if (a < b && b > 0) { console.log("<этот текст не должен стать тегом>"); }
+  </script>
+</body>
+</html>
