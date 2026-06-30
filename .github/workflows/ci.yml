@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Engine tests (zero-dependency)
+        run: node test/run.js
+
+      - name: Frontend — install, build, test
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+          npm test

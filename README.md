@@ -1,5 +1,11 @@
 # SiteReady — аудит сайта «под ключ»
 
+[![CI](https://github.com/Osmanovvv/SiteReady/actions/workflows/ci.yml/badge.svg)](https://github.com/Osmanovvv/SiteReady/actions/workflows/ci.yml)
+![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)
+![deps](https://img.shields.io/badge/engine-zero%20dependencies-success)
+![tests](https://img.shields.io/badge/tests-78%20engine%20%2B%205%20web-success)
+![license](https://img.shields.io/badge/license-MIT-blue)
+
 Веб-приложение, которое за один прогон обходит сайт и выдаёт единый отчёт по
 **SEO · техническому QA · производительности · доступности · адаптивности** —
 с общим баллом, буквенной оценкой A–F, приоритизированными проблемами и советами
@@ -17,9 +23,11 @@
 
 ## Быстрый старт
 
-Фронт уже собран в `web/dist`, поэтому достаточно:
+Фронт уже собран в `web/dist`, поэтому после клонирования достаточно одной команды:
 
 ```bash
+git clone https://github.com/Osmanovvv/SiteReady.git
+cd SiteReady
 node server.js
 ```
 
@@ -122,4 +130,4 @@ cd web && npm test       # фронт: node --test — маппинг сообщ
 
 ---
 
-Подробности — в `PLAN.md` и `CONTRACT.md`. Лицензия проекта — на усмотрение владельца.
+Подробности — в `PLAN.md` и `CONTRACT.md`. Лицензия — [MIT](LICENSE).
