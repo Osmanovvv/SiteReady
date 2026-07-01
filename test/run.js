@@ -244,6 +244,25 @@ async function main() {
     assert.ok(f && f.mode === "prevalence" && f.penalty >= 29.9, "https penalty=" + (f && f.penalty));
   });
 
+  const anchorRep = await audit(base + "/anchors.html", { allowPrivate: true, maxPages: 1 });
+  await test("broken-anchor: old-style <a name>, #top and id targets are valid — only a genuinely-missing frag counts", () => {
+    // 5 frag links on the page: #intro/#details (name), #modern (id), #top (spec top) are all valid;
+    // only #missing is broken. Before the fix, name-based targets produced huge false positives.
+    const f = anchorRep.issues.find((i) => i.id === "tech.broken-anchor");
+    assert.ok(f, "expected exactly one broken-anchor defect for #missing");
+    assert.strictEqual(f.affectedCount, 1, "only #missing should be broken, got " + (f && f.affectedCount));
+    assert.ok(f.sample.includes("#missing"), "sample should name the broken fragment");
+  });
+
+  const slashRep = await audit(base + "/slashlink.html", { allowPrivate: true, maxPages: 5 });
+  await test("broken-link.internal catches a trailing-slash target (both sides canonicalized)", () => {
+    // The page links href="/team/" to a 404; the crawler stores the target as "/team".
+    // Before the fix the raw "/team/" key never matched "/team" and the broken link was missed.
+    const f = slashRep.issues.find((i) => i.id === "tech.broken-link.internal");
+    assert.ok(f, "expected broken-link.internal for the /team/ → /team 404 target");
+    assert.ok(f.sample.some((s) => s.startsWith("/team")), "sample should include the /team target: " + JSON.stringify(f.sample));
+  });
+
   console.log("SPA handling:");
   const spaRep = await audit(base + "/spa.html", { allowPrivate: true, maxPages: 3 });
   await test("SPA page is flagged", () => assert.strictEqual(spaRep.meta.flags.spa, true));
@@ -284,6 +303,17 @@ async function main() {
     await fetch(base + "/drip", { allowPrivate: true, timeout: 400 }).catch(() => {});
     assert.ok(Date.now() - t0 < 2500, "drip fetch was not bounded by the deadline");
   });
+  await test("total deadline spans the WHOLE redirect chain (budget not reset per hop)", async () => {
+    // Two 500ms redirect hops with a 700ms total budget: a per-hop timer would let both
+    // hops through and succeed (~1000ms); a true shared deadline aborts mid-chain (~700ms).
+    const t0 = Date.now();
+    let code = null;
+    try { await fetch(base + "/slow-redirect", { allowPrivate: true, timeout: 700 }); }
+    catch (e) { code = e.code; }
+    const dt = Date.now() - t0;
+    assert.strictEqual(code, "TIMEOUT", "expected a shared-deadline TIMEOUT across the redirect chain");
+    assert.ok(dt < 950, "should abort near the 700ms total budget, took " + dt + "ms");
+  });
 
   console.log("reachability gate (dead site ≠ A):");
   await test("all-error (500) site scores F", async () => { const r = await audit(base + "/dead", { allowPrivate: true, maxPages: 5 }); assert.strictEqual(r.score.grade, "F"); });
@@ -316,6 +346,17 @@ async function main() {
   });
   await test("heading text decodes entities", () => {
     assert.strictEqual(parseHtml("<h1>Tom &amp; Jerry</h1>").headings[0].text, "Tom & Jerry");
+  });
+  await test("out-of-range numeric character reference degrades (never throws) — text and attributes", () => {
+    // String.fromCodePoint throws RangeError for code > 0x10FFFF; the parser must
+    // replace with U+FFFD, not crash the whole audit. Hit text, title, and an href attr.
+    assert.doesNotThrow(() => parseHtml("<h1>Deal &#x110000; now</h1>"));
+    assert.doesNotThrow(() => parseHtml("<title>Hi &#999999999999; there</title>"));
+    assert.doesNotThrow(() => parseHtml('<a href="/p?x=&#xFFFFFFFF;">link</a>'));
+    const pg = parseHtml("<h1>A&#x110000;B</h1>");
+    assert.ok(pg.headings[0].text.includes("�"), "bad ref should become U+FFFD: " + pg.headings[0].text);
+    // A valid reference still decodes correctly.
+    assert.strictEqual(parseHtml("<h1>&#128512;</h1>").headings[0].text, "\u{1F600}");
   });
 
   console.log("crawler (canonicalization + hard cap):");
@@ -473,6 +514,18 @@ async function main() {
     assert.ok(/sr_session=letmein/.test(same) && /Bearer sr-token/.test(same), "auth not sent same-origin");
     const cross = decodeBody((await fetch(base + "/auth-redirect-cross", { allowPrivate: true, auth })).body, "text/plain");
     assert.ok(!/sr_session=letmein/.test(cross) && !/Bearer sr-token/.test(cross), "auth LEAKED across origin");
+  });
+  await test("auth pinned to start origin — DROPPED when a same-host link downgrades https→http", async () => {
+    const auth = { cookie: "sr_session=letmein", headers: { Authorization: "Bearer sr-token" } };
+    const httpOrigin = new URL(base).origin;
+    const httpsOrigin = httpOrigin.replace(/^http:/, "https:");
+    // Credentials belong to the https:// start origin; the actual request is the same
+    // host over http:// (a scheme downgrade). Origin includes scheme, so auth must drop.
+    const downgraded = decodeBody((await fetch(base + "/auth-echo", { allowPrivate: true, auth, authOrigin: httpsOrigin })).body, "text/plain");
+    assert.ok(!/sr_session=letmein/.test(downgraded) && !/Bearer sr-token/.test(downgraded), "auth LEAKED over https→http downgrade");
+    // Control: when the pinned origin matches the request, the creds ARE sent.
+    const matched = decodeBody((await fetch(base + "/auth-echo", { allowPrivate: true, auth, authOrigin: httpOrigin })).body, "text/plain");
+    assert.ok(/sr_session=letmein/.test(matched) && /Bearer sr-token/.test(matched), "auth not sent when origin matches");
   });
 
   console.log("history store + diff (PLAN-v2 §2):");

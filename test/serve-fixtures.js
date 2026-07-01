@@ -29,6 +29,10 @@ function createServer() {
     if (p === "/redirect-chain") { res.writeHead(302, { Location: "/redirect-2" }); return res.end(); }
     if (p === "/redirect-2") { res.writeHead(302, { Location: "/index.html" }); return res.end(); }
     if (p === "/redirect-loop") { res.writeHead(302, { Location: "/redirect-loop" }); return res.end(); }
+    // Two slow redirect hops (500ms each) → used to prove the fetch total-time budget
+    // spans the WHOLE chain instead of resetting per hop.
+    if (p === "/slow-redirect") { const t = setTimeout(() => { res.writeHead(302, { Location: "/slow-redirect2" }); res.end(); }, 500); req.on("close", () => clearTimeout(t)); return; }
+    if (p === "/slow-redirect2") { const t = setTimeout(() => { res.writeHead(302, { Location: "/index.html" }); res.end(); }, 500); req.on("close", () => clearTimeout(t)); return; }
     if (p === "/slow") {
       const t = setTimeout(() => {
         res.writeHead(200, { "Content-Type": "text/html" });

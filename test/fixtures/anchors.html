@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Регресс-тест якорей: старые name-якоря, #top и битые ссылки</title>
+  <meta name="description" content="Фикстура для проверки, что ссылки на старые якоря вида a-name и специальный top не считаются битыми.">
+</head>
+<body>
+  <h1>Проверка якорей</h1>
+
+  <!-- Старые якоря old-style: цель задаётся через name, а не id -->
+  <a name="intro"></a>
+  <a name="details"></a>
+  <!-- Современный якорь: цель через id -->
+  <p id="modern">Достаточно текста, чтобы страница не выглядела пустым SPA-каркасом и уверенно прошла проверку контента и объёма.</p>
+
+  <a href="#intro">К вступлению (old-style name)</a>
+  <a href="#details">К деталям (old-style name)</a>
+  <a href="#modern">К современному разделу (id)</a>
+  <a href="#top">Наверх (спец. #top без явного id)</a>
+  <a href="#missing">Единственный реально битый якорь</a>
+</body>
+</html>
