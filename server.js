@@ -9,6 +9,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { URL } = require("url");
 const { audit } = require("./src/audit");
 const { assertHostAllowed } = require("./src/net-guard");
@@ -69,6 +70,62 @@ function normalizeInput(raw) {
   try { return new URL(withScheme); } catch (_) { return null; }
 }
 
+// Pending audit sessions (PLAN-v2 §4): auth credentials are stashed in memory keyed
+// by a one-time token, so they never appear in the SSE URL / logs / history.
+const pending = new Map(); // token -> { opts, expires }
+function sweepPending() { const now = Date.now(); for (const [t, e] of pending) if (e.expires < now) pending.delete(t); }
+function putPending(opts) {
+  sweepPending();
+  const token = crypto.randomBytes(16).toString("hex");
+  pending.set(token, { opts, expires: Date.now() + 120000 });
+  return token;
+}
+function takePending(token) {
+  const e = pending.get(token);
+  if (!e) return null;
+  pending.delete(token); // single-use
+  return e.expires < Date.now() ? null : e.opts;
+}
+
+function normalizeAuth(auth) {
+  if (!auth || typeof auth !== "object") return null;
+  const out = {};
+  if (typeof auth.cookie === "string" && auth.cookie.trim()) out.cookie = auth.cookie.trim();
+  if (auth.headers && typeof auth.headers === "object") {
+    const h = {};
+    for (const [k, v] of Object.entries(auth.headers)) if (typeof k === "string" && k.trim() && v != null) h[k.trim()] = String(v);
+    if (Object.keys(h).length) out.headers = h;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function optsFromInput(input, isDeep) {
+  const deep = !!isDeep;
+  return {
+    allowPrivate: !!input.allowLocal,
+    checkExternal: !!input.checkExternal,
+    deep,
+    maxPages: clampInt(input.limit, deep ? 12 : 50, 1, deep ? DEEP_MAX_PAGES : 500),
+    auth: normalizeAuth(input.auth),
+  };
+}
+
+// POST /api/audit/prepare → stash opts (incl. auth) in memory, return an opaque token.
+function handlePrepare(req, res) {
+  let body = "";
+  let tooBig = false;
+  req.on("data", (c) => { body += c; if (body.length > 65536) { tooBig = true; req.destroy(); } });
+  req.on("end", () => {
+    if (tooBig) return;
+    let data;
+    try { data = JSON.parse(body); } catch (_) { return sendJson(res, { error: "bad json" }, 400); }
+    const urlObj = normalizeInput(data.url);
+    if (!urlObj) return sendJson(res, { error: "BAD_URL" }, 400);
+    const opts = { urlHref: urlObj.href, startUrl: data.url, ...optsFromInput(data, data.deep) };
+    sendJson(res, { token: putPending(opts) });
+  });
+}
+
 function handleAudit(req, res, params) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -80,49 +137,42 @@ function handleAudit(req, res, params) {
     try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch (_) { /* client gone */ }
   };
 
-  const urlObj = normalizeInput(params.get("url"));
-  if (!urlObj) { send("error", { code: "BAD_URL", message: "Некорректный URL" }); return res.end(); }
+  // Resolve opts from a one-time token (auth flow) or from query params (plain flow).
+  let opts;
+  const token = params.get("token");
+  if (token) {
+    opts = takePending(token);
+    if (!opts) { send("error", { code: "BAD_URL", message: "Сессия аудита истекла — запустите заново." }); return res.end(); }
+  } else {
+    const urlObj = normalizeInput(params.get("url"));
+    if (!urlObj) { send("error", { code: "BAD_URL", message: "Некорректный URL" }); return res.end(); }
+    opts = { urlHref: urlObj.href, startUrl: params.get("url"), ...optsFromInput({ allowLocal: truthy(params.get("allowLocal")), checkExternal: truthy(params.get("checkExternal")), limit: params.get("limit") }, truthy(params.get("deep"))) };
+  }
 
-  const allowPrivate = truthy(params.get("allowLocal"));
-  const checkExternal = truthy(params.get("checkExternal"));
-  const deep = truthy(params.get("deep"));
-  const maxPages = clampInt(params.get("limit"), deep ? 12 : 50, 1, deep ? DEEP_MAX_PAGES : 500);
-
-  if (deep && !isDeepAvailable()) {
-    send("error", {
-      code: "DEEP_UNAVAILABLE",
-      message: "Глубокий режим недоступен: на сервере не установлен браузер (npm i playwright && npx playwright install chromium).",
-    });
+  if (opts.deep && !isDeepAvailable()) {
+    send("error", { code: "DEEP_UNAVAILABLE", message: "Глубокий режим недоступен: на сервере не установлен браузер (npm i playwright && npx playwright install chromium)." });
     return res.end();
   }
 
-  // Up-front, clear error for a literal private/blocked host (hostnames are
-  // still validated at resolve time inside the engine).
+  const urlObj = new URL(opts.urlHref);
   try {
-    assertHostAllowed(urlObj, allowPrivate);
+    assertHostAllowed(urlObj, opts.allowPrivate);
   } catch (_) {
-    send("error", {
-      code: allowPrivate ? "SSRF_BLOCKED" : "PRIVATE_BLOCKED",
-      message: "Адрес заблокирован egress-защитой. Для аудита локального адреса включите «разрешить локальные адреса».",
-    });
+    send("error", { code: opts.allowPrivate ? "SSRF_BLOCKED" : "PRIVATE_BLOCKED", message: "Адрес заблокирован egress-защитой. Для аудита локального адреса включите «разрешить локальные адреса»." });
     return res.end();
   }
 
   let aborted = false;
   req.on("close", () => { aborted = true; });
 
-  send("meta", {
-    startUrl: params.get("url"),
-    normalizedUrl: urlObj.href,
-    startedAt: new Date().toISOString(),
-    pagesDiscovered: 0,
-  });
+  send("meta", { startUrl: opts.startUrl, normalizedUrl: urlObj.href, startedAt: new Date().toISOString(), pagesDiscovered: 0 });
 
-  audit(urlObj.href, {
-    maxPages,
-    allowPrivate,
-    checkExternal,
-    deep,
+  audit(opts.urlHref, {
+    maxPages: opts.maxPages,
+    allowPrivate: opts.allowPrivate,
+    checkExternal: opts.checkExternal,
+    deep: opts.deep,
+    auth: opts.auth,
     onProgress: (p) => { if (!aborted) send("progress", p); },
     signal: () => aborted,
   })
@@ -130,7 +180,7 @@ function handleAudit(req, res, params) {
       if (aborted) return;
       send("done", report); // CONTRACT: the Report object itself, no wrapper
       res.end();
-      saveAudit(report); // best-effort history persistence (PLAN-v2 §2)
+      if (process.env.SITEREADY_NO_HISTORY !== "1") saveAudit(report); // best-effort history (PLAN-v2 §2)
     })
     .catch((e) => {
       if (aborted) return;
@@ -190,6 +240,7 @@ function createServer() {
     if (req.method === "GET" && u.pathname === "/api/diff") {
       return void handleDiff(res, u.searchParams.get("a"), u.searchParams.get("b"));
     }
+    if (req.method === "POST" && u.pathname === "/api/audit/prepare") return handlePrepare(req, res);
     if (req.method === "GET" && u.pathname === "/api/audit/stream") return handleAudit(req, res, u.searchParams);
     if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end("Method not allowed"); }
     if (hasFrontend) return serveStatic(req, res, u.pathname);

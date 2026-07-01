@@ -115,7 +115,18 @@ async function readBodyCapped(res, encoding, maxBytes) {
   return { body: dec.body, truncated: raw.truncated || dec.lossy };
 }
 
-function rawRequest(urlObj, { method, timeout, allowPrivate }) {
+// Build the auth headers (custom headers + Cookie) from an { cookie, headers } object.
+function buildAuthHeaders(auth) {
+  if (!auth || typeof auth !== "object") return null;
+  const h = {};
+  if (auth.headers && typeof auth.headers === "object") {
+    for (const [k, v] of Object.entries(auth.headers)) if (k && v != null) h[k] = String(v);
+  }
+  if (auth.cookie) h.Cookie = String(auth.cookie);
+  return Object.keys(h).length ? h : null;
+}
+
+function rawRequest(urlObj, { method, timeout, allowPrivate, extraHeaders }) {
   return new Promise((resolve, reject) => {
     assertHostAllowed(urlObj, allowPrivate);
     const mod = urlObj.protocol === "https:" ? https : http;
@@ -135,6 +146,7 @@ function rawRequest(urlObj, { method, timeout, allowPrivate }) {
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Encoding": "gzip, deflate, br",
           "Accept-Language": "ru,en;q=0.8",
+          ...(extraHeaders || {}),
         },
       },
       (res) => resolve({ res, ttfbMs: elapsedMs(startBig), ac, hard })
@@ -163,11 +175,17 @@ async function fetch(rawUrl, opts = {}) {
   let hops = 0;
   const totalStart = process.hrtime.bigint();
 
+  // Auth (cookie/headers) is sent ONLY to the origin it was issued for. If a redirect
+  // crosses origin, the credentials are dropped — never leak them to another host.
+  const authHeaders = buildAuthHeaders(o.auth);
+  const authOrigin = urlObj.origin;
+
   while (true) {
     if (visited.has(urlObj.href)) throw makeError(`Redirect loop at ${urlObj.href}`, "REDIRECT_LOOP");
     visited.add(urlObj.href);
 
-    const { res, ttfbMs, ac, hard } = await rawRequest(urlObj, { method, timeout: o.timeout, allowPrivate });
+    const extraHeaders = urlObj.origin === authOrigin ? authHeaders : null;
+    const { res, ttfbMs, ac, hard } = await rawRequest(urlObj, { method, timeout: o.timeout, allowPrivate, extraHeaders });
     const status = res.statusCode;
     const headers = res.headers;
 

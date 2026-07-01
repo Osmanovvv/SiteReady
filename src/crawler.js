@@ -52,6 +52,7 @@ async function crawl(startUrl, opts = {}) {
     throttleMs = 150,
     timeout = 15000,
     allowPrivate = false,
+    auth = null, // { cookie, headers } — sent to the start host only (same-origin)
     onProgress = null,
     signal = null, // () => boolean — when true, stop crawling (client disconnected)
     // Soft aggregate byte budget. It's checked after each fetch, so under
@@ -94,7 +95,7 @@ async function crawl(startUrl, opts = {}) {
 
     let res;
     try {
-      res = await fetch(url, { allowPrivate, timeout });
+      res = await fetch(url, { allowPrivate, timeout, auth });
     } catch (e) {
       if (results.length < maxPages) {
         results.push({ url, finalUrl: url, status: 0, error: e.code || "UNREACHABLE", redirectChain: [], page: null });

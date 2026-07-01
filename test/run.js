@@ -4,6 +4,8 @@
 // fixture server on 127.0.0.1, no outbound network. Gate: crawl yields pages +
 // parsed data, and net/fetcher/parser behave correctly.
 
+process.env.SITEREADY_NO_HISTORY = "1"; // don't write history files during tests
+
 const assert = require("node:assert");
 const { createServer } = require("./serve-fixtures");
 const { fetch, decodeBody } = require("../src/fetcher");
@@ -412,6 +414,10 @@ async function main() {
       assert.ok(r.issues.some((i) => i.id === "tech.js-error"), "no js-error finding");
       assert.ok(r.issues.some((i) => i.id === "tech.js-console"), "no js-console finding");
     });
+    await test("[deep] auth: protected page renders with cookie in the browser (200)", async () => {
+      const r = await audit(base + "/protected", { deep: true, allowPrivate: true, maxPages: 1, auth: { cookie: "sr_session=letmein" } });
+      assert.strictEqual(r.pages[0].status, 200);
+    });
     if (isAxeAvailable()) {
       await test("[deep+axe] bad-contrast page → a11y.contrast + accessibility confidence=full", async () => {
         const r = await audit(base + "/bad-contrast", { deep: true, allowPrivate: true, maxPages: 1 });
@@ -425,6 +431,25 @@ async function main() {
   } else {
     console.log("  (browser tests skipped — Playwright not installed)");
   }
+
+  console.log("auth — login-protected pages (PLAN-v2 §4):");
+  await test("protected page: 401 without auth, 200 with cookie", async () => {
+    const no = await audit(base + "/protected", { allowPrivate: true, maxPages: 1 });
+    assert.strictEqual(no.pages[0].status, 401);
+    const yes = await audit(base + "/protected", { allowPrivate: true, maxPages: 1, auth: { cookie: "sr_session=letmein" } });
+    assert.strictEqual(yes.pages[0].status, 200);
+  });
+  await test("protected page: 200 with Authorization header", async () => {
+    const r = await audit(base + "/protected", { allowPrivate: true, maxPages: 1, auth: { headers: { Authorization: "Bearer sr-token" } } });
+    assert.strictEqual(r.pages[0].status, 200);
+  });
+  await test("auth sent same-origin but DROPPED on cross-origin redirect", async () => {
+    const auth = { cookie: "sr_session=letmein", headers: { Authorization: "Bearer sr-token" } };
+    const same = decodeBody((await fetch(base + "/auth-echo", { allowPrivate: true, auth })).body, "text/plain");
+    assert.ok(/sr_session=letmein/.test(same) && /Bearer sr-token/.test(same), "auth not sent same-origin");
+    const cross = decodeBody((await fetch(base + "/auth-redirect-cross", { allowPrivate: true, auth })).body, "text/plain");
+    assert.ok(!/sr_session=letmein/.test(cross) && !/Bearer sr-token/.test(cross), "auth LEAKED across origin");
+  });
 
   console.log("history store + diff (PLAN-v2 §2):");
   const store = require("../src/store");
@@ -582,6 +607,18 @@ async function main() {
     } finally {
       delete process.env.SITEREADY_NO_DEEP;
     }
+  });
+  await test("POST /api/audit/prepare → token → SSE stream?token= runs the audit (single-use)", async () => {
+    const token = await new Promise((resolve) => {
+      const body = JSON.stringify({ url: base + "/", allowLocal: true, limit: 3 });
+      const req = http.request(`http://127.0.0.1:${ePort}/api/audit/prepare`, { method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } }, (r) => { let s = ""; r.setEncoding("utf8"); r.on("data", (d) => (s += d)); r.on("end", () => { try { resolve(JSON.parse(s).token); } catch { resolve(null); } }); });
+      req.end(body);
+    });
+    assert.ok(token && token.length >= 16, "no token");
+    const evs = await collectSSE(`http://127.0.0.1:${ePort}/api/audit/stream?token=${token}`);
+    assert.strictEqual(evs[evs.length - 1].event, "done", "stream did not complete");
+    const again = await collectSSE(`http://127.0.0.1:${ePort}/api/audit/stream?token=${token}`);
+    assert.ok(again.some((e) => e.event === "error"), "token must be single-use");
   });
   await test("server serves the engine placeholder at /", async () => {
     const html = await new Promise((resolve) => {

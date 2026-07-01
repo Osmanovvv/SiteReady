@@ -126,7 +126,7 @@ async function hostAllowed(host, allowPrivate) {
   return !addrs.some((a) => isAddressBlocked(a.address, a.family, allowPrivate));
 }
 
-async function installEgressGuard(context, allowPrivate) {
+async function installEgressGuard(context, allowPrivate, authOpts) {
   await context.route("**/*", async (route) => {
     let u;
     try { u = new URL(route.request().url()); } catch (_) { return route.continue(); }
@@ -136,7 +136,12 @@ async function installEgressGuard(context, allowPrivate) {
     if (proto === "data:" || proto === "blob:" || proto === "about:" || proto === "filesystem:") return route.continue();
     if (proto !== "http:" && proto !== "https:") return route.abort("blockedbyclient"); // file:/ftp:/…
     try {
-      return (await hostAllowed(u.hostname, allowPrivate)) ? route.continue() : route.abort("blockedbyclient");
+      if (!(await hostAllowed(u.hostname, allowPrivate))) return route.abort("blockedbyclient");
+      // Inject auth headers ONLY for the start origin — never leak them cross-origin.
+      if (authOpts && authOpts.headers && u.origin === authOpts.origin) {
+        return route.continue({ headers: { ...route.request().headers(), ...authOpts.headers } });
+      }
+      return route.continue();
     } catch (_) {
       return route.abort("failed");
     }
@@ -224,8 +229,20 @@ async function renderOne(context, url, opts = {}) {
 
 // BFS over the start host using the browser. Sequential (one nav at a time) — the
 // browser is heavy, so deep defaults to a smaller page budget than static.
+function parseCookiePairs(cookieStr) {
+  return String(cookieStr)
+    .split(";")
+    .map((p) => { const i = p.indexOf("="); return i < 0 ? null : [p.slice(0, i).trim(), p.slice(i + 1).trim()]; })
+    .filter((x) => x && x[0]);
+}
+function lowerHeaders(headers) {
+  const out = {};
+  if (headers && typeof headers === "object") for (const [k, v] of Object.entries(headers)) if (k && v != null) out[String(k).toLowerCase()] = String(v);
+  return out;
+}
+
 async function deepCrawl(startUrl, opts = {}) {
-  const { maxPages = 10, allowPrivate = false, onProgress = null, signal = null, timeout = 25000 } = opts;
+  const { maxPages = 10, allowPrivate = false, auth = null, onProgress = null, signal = null, timeout = 25000 } = opts;
 
   let start;
   try {
@@ -261,7 +278,14 @@ async function deepCrawl(startUrl, opts = {}) {
   }
   try {
     const context = await browser.newContext({ userAgent: "SiteReadyBot/1.0 (+deep)", ...(opts.contextOptions || {}) });
-    await installEgressGuard(context, allowPrivate);
+    // Auth (same-origin only): cookies go into the browser jar (scoped to the host),
+    // custom headers are injected by the guard for the start origin only.
+    if (auth && auth.cookie) {
+      const cookies = parseCookiePairs(auth.cookie).map(([name, value]) => ({ name, value, url: start.origin }));
+      if (cookies.length) await context.addCookies(cookies).catch(() => {});
+    }
+    const authOpts = auth && auth.headers ? { origin: start.origin, headers: lowerHeaders(auth.headers) } : null;
+    await installEgressGuard(context, allowPrivate, authOpts);
 
     const baseHost = hostKey(start.hostname);
     const startHost = start.hostname.toLowerCase();

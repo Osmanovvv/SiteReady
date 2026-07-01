@@ -8,6 +8,8 @@ export interface AuditOptions {
   checkExternal?: boolean;
   allowLocal?: boolean;
   deep?: boolean;
+  token?: string; // one-time session token (auth flow) — replaces url/params in the SSE
+  auth?: { cookie?: string; headers?: Record<string, string> };
 }
 
 export type ProgressEvent =
@@ -33,11 +35,17 @@ function streamBase(): string {
 export function startAudit(opts: AuditOptions, onEvent: (e: ProgressEvent) => void): () => void {
   if (useRealBackend()) {
     const u = new URL("/api/audit/stream", streamBase());
-    u.searchParams.set("url", opts.url);
-    if (opts.limit != null) u.searchParams.set("limit", String(opts.limit));
-    if (opts.checkExternal != null) u.searchParams.set("checkExternal", String(opts.checkExternal));
-    if (opts.allowLocal != null) u.searchParams.set("allowLocal", String(opts.allowLocal));
-    if (opts.deep != null) u.searchParams.set("deep", String(opts.deep));
+    if (opts.token) {
+      // Auth flow: everything (incl. credentials) is stashed server-side behind the
+      // token; nothing sensitive goes in the URL.
+      u.searchParams.set("token", opts.token);
+    } else {
+      u.searchParams.set("url", opts.url);
+      if (opts.limit != null) u.searchParams.set("limit", String(opts.limit));
+      if (opts.checkExternal != null) u.searchParams.set("checkExternal", String(opts.checkExternal));
+      if (opts.allowLocal != null) u.searchParams.set("allowLocal", String(opts.allowLocal));
+      if (opts.deep != null) u.searchParams.set("deep", String(opts.deep));
+    }
 
     const es = new EventSource(u.toString());
     es.addEventListener("meta", (ev) => {
@@ -210,6 +218,33 @@ export async function fetchDiff(a: string, b: string): Promise<DiffResult | null
     const res = await fetch(new URL(`/api/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`, streamBase()).toString());
     if (!res.ok) return null;
     return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prepare an audit with credentials: POST the options to the server, which stashes
+ * them behind a one-time token. The credentials never touch the SSE URL / history.
+ */
+export async function prepareAudit(opts: {
+  url: string;
+  limit?: number;
+  checkExternal?: boolean;
+  allowLocal?: boolean;
+  deep?: boolean;
+  auth?: { cookie?: string; headers?: Record<string, string> };
+}): Promise<string | null> {
+  if (!useRealBackend()) return null;
+  try {
+    const res = await fetch(new URL("/api/audit/prepare", streamBase()).toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return typeof j.token === "string" ? j.token : null;
   } catch {
     return null;
   }

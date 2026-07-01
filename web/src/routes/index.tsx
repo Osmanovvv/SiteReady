@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ChevronDown, Gauge, ShieldCheck, Sparkles } from "lucide-react";
-import { isMockMode, fetchCapabilities } from "@/lib/api";
+import { isMockMode, fetchCapabilities, prepareAudit } from "@/lib/api";
 import { clearReport } from "@/lib/report-store";
 
 export const Route = createFileRoute("/")({
@@ -22,6 +22,18 @@ export const Route = createFileRoute("/")({
   component: StartPage,
 });
 
+function parseHeaders(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const i = line.indexOf(":");
+    if (i < 0) continue;
+    const k = line.slice(0, i).trim();
+    const v = line.slice(i + 1).trim();
+    if (k && v) out[k] = v;
+  }
+  return out;
+}
+
 function StartPage() {
   const navigate = useNavigate();
   const [url, setUrl] = useState("");
@@ -31,6 +43,8 @@ function StartPage() {
   const [allowLocal, setAllowLocal] = useState(false);
   const [deep, setDeep] = useState(false);
   const [deepAvailable, setDeepAvailable] = useState<boolean | null>(null);
+  const [cookie, setCookie] = useState("");
+  const [headersText, setHeadersText] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -41,16 +55,36 @@ function StartPage() {
     fetchCapabilities().then((c) => setDeepAvailable(c.deep));
   }, []);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = url.trim();
     if (!trimmed) return;
     const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
     const safeLimit = Number.isFinite(limit) && limit >= 1 ? Math.min(500, Math.floor(limit)) : 50;
+    const effectiveDeep = deep && deepAvailable !== false;
     clearReport();
+
+    const headers = parseHeaders(headersText);
+    const hasAuth = cookie.trim().length > 0 || Object.keys(headers).length > 0;
+    if (hasAuth) {
+      // Credentials go via a one-time token (not the URL). Falls back to the plain
+      // flow if the server can't be reached (e.g. mock mode).
+      const token = await prepareAudit({
+        url: normalized,
+        limit: safeLimit,
+        checkExternal,
+        allowLocal,
+        deep: effectiveDeep,
+        auth: { cookie: cookie.trim() || undefined, headers: Object.keys(headers).length ? headers : undefined },
+      });
+      if (token) {
+        navigate({ to: "/progress", search: { url: normalized, token } });
+        return;
+      }
+    }
     navigate({
       to: "/progress",
-      search: { url: normalized, limit: safeLimit, checkExternal, allowLocal, deep: deep && deepAvailable !== false },
+      search: { url: normalized, limit: safeLimit, checkExternal, allowLocal, deep: effectiveDeep },
     });
   };
 
@@ -165,6 +199,28 @@ function StartPage() {
                     Разрешить локальные адреса
                   </Label>
                   <Switch id="local" checked={allowLocal} onCheckedChange={setAllowLocal} />
+                </div>
+                <div className="border-t pt-4">
+                  <Label htmlFor="cookie" className="text-sm">
+                    Авторизация (для закрытых страниц)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Отправляется только на этот адрес, хранится лишь на время аудита — не пишется в историю и логи.
+                  </p>
+                  <Input
+                    id="cookie"
+                    placeholder="Cookie: session=…; token=…"
+                    value={cookie}
+                    onChange={(e) => setCookie(e.target.value)}
+                    className="mt-2 font-mono text-xs"
+                  />
+                  <textarea
+                    placeholder={"Заголовки, по одному в строке:\nAuthorization: Bearer …"}
+                    value={headersText}
+                    onChange={(e) => setHeadersText(e.target.value)}
+                    rows={2}
+                    className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                  />
                 </div>
               </div>
             )}

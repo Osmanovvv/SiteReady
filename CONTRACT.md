@@ -54,6 +54,12 @@ GET {API_BASE}/api/audit/stream?url=<сайт>&limit=50&checkExternal=1&allowLoc
   > текста (axe-core), при этом категория a11y получает `confidence: "full"`;
   > `tech.js-error` (необработанные JS-исключения) и `tech.js-console` (`console.error`).
   > Это обычные issue — старый фронт просто отрисует их в общем списке.
+- **Авторизация (закрытые страницы, v2 §4).** Креды НЕ передаются в URL. Поток:
+  `POST /api/audit/prepare` с телом `{ url, limit, deep, allowLocal, checkExternal,
+  auth: { cookie, headers } }` → `{ token }` (одноразовый, TTL ~2 мин). Затем
+  `GET /api/audit/stream?token=<token>` (вместо `url&...`). Auth применяется только к
+  same-origin (сбрасывается на кросс-origin редиректе), живёт в памяти на время аудита,
+  **не пишется в историю/логи** (перед сохранением отчёта креды вычищаются).
 
 ---
 

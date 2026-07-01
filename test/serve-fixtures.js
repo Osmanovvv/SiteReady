@@ -104,6 +104,26 @@ function createServer() {
           "</body></html>"
       );
     }
+    if (p === "/protected") {
+      // Requires auth: cookie sr_session=letmein OR Authorization: Bearer sr-token.
+      const cookie = req.headers.cookie || "";
+      const authz = req.headers.authorization || "";
+      if (/sr_session=letmein/.test(cookie) || authz === "Bearer sr-token") {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        return res.end('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Личный кабинет</title></head><body><h1>Личный кабинет</h1><p>Закрытый раздел, доступ только по авторизации.</p></body></html>');
+      }
+      res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+      return res.end("<html><body>401 требуется авторизация</body></html>");
+    }
+    if (p === "/auth-echo") {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("cookie=" + (req.headers.cookie || "") + ";authz=" + (req.headers.authorization || ""));
+    }
+    if (p === "/auth-redirect-cross") {
+      // Redirect to a DIFFERENT origin (localhost vs 127.0.0.1) — auth must be dropped.
+      res.writeHead(302, { Location: `http://localhost:${req.socket.localPort}/auth-echo` });
+      return res.end();
+    }
     if (p === "/js-error") {
       // Intentional uncaught exception + a console.error — for deep JS-console checks.
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
