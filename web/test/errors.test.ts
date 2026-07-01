@@ -2,13 +2,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ERROR_TEXT, errorText, TRANSPORT_ERROR } from "../src/lib/errors.ts";
 
-const CODES = ["BAD_URL", "DNS_FAIL", "PRIVATE_BLOCKED", "SSRF_BLOCKED", "TIMEOUT", "UNREACHABLE"];
+const CODES = ["BAD_URL", "DNS_FAIL", "PRIVATE_BLOCKED", "SSRF_BLOCKED", "TIMEOUT", "UNREACHABLE", "REDIRECT_LOOP", "DEEP_UNAVAILABLE"];
 
 test("each CONTRACT error code maps to its own non-empty text", () => {
   for (const code of CODES) {
     assert.ok(ERROR_TEXT[code] && ERROR_TEXT[code].length > 5, `missing/short text for ${code}`);
     assert.strictEqual(errorText(code), ERROR_TEXT[code]);
   }
+});
+
+test("REDIRECT_LOOP copy names the redirect problem specifically", () => {
+  assert.match(ERROR_TEXT.REDIRECT_LOOP, /редирект|переадрес/i);
 });
 
 test("PRIVATE_BLOCKED copy invites enabling local addresses", () => {

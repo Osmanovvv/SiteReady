@@ -29,7 +29,8 @@ GET {API_BASE}/api/audit/stream?url=<сайт>&limit=50&checkExternal=1&allowLoc
 > `generatedAt` (конец). Имена различаются намеренно — это разные моменты, не опечатка.
 
 Коды ошибок (`error.code`): `BAD_URL`, `DNS_FAIL`, `PRIVATE_BLOCKED` (приватный адрес,
-нужен `allowLocal=1`), `SSRF_BLOCKED`, `TIMEOUT`, `UNREACHABLE`, `DEEP_UNAVAILABLE`
+нужен `allowLocal=1`), `SSRF_BLOCKED`, `TIMEOUT`, `UNREACHABLE`, `REDIRECT_LOOP`
+(стартовый URL зациклил переадресацию), `DEEP_UNAVAILABLE`
 (запрошен `deep`, но на сервере не установлен браузер).
 
 > На этапе Lovable стрим можно не подключать — рисуем по `sample-report.json`.

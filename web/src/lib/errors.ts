@@ -9,6 +9,7 @@ export const ERROR_TEXT: Record<string, string> = {
   SSRF_BLOCKED: "Адрес заблокирован egress-защитой (похоже на внутренний ресурс).",
   TIMEOUT: "Сайт не ответил вовремя. Попробуйте ещё раз.",
   UNREACHABLE: "Не удалось подключиться к сайту.",
+  REDIRECT_LOOP: "Сайт зациклил переадресацию (redirect loop). Проверьте настройки редиректов.",
   DEEP_UNAVAILABLE:
     "Глубокий режим недоступен: на сервере не установлен браузер (npm i playwright && npx playwright install chromium).",
 };

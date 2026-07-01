@@ -3,7 +3,7 @@
 [![CI](https://github.com/Osmanovvv/SiteReady/actions/workflows/ci.yml/badge.svg)](https://github.com/Osmanovvv/SiteReady/actions/workflows/ci.yml)
 ![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)
 ![deps](https://img.shields.io/badge/engine-zero%20dependencies-success)
-![tests](https://img.shields.io/badge/tests-78%20engine%20%2B%205%20web-success)
+![tests](https://img.shields.io/badge/tests-106%20engine%20%2B%206%20web-success)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
 Веб-приложение, которое за один прогон обходит сайт и выдаёт единый отчёт по
@@ -89,7 +89,7 @@ Egress-защита распространяется и на запросы бр
 ## Тесты
 
 ```bash
-npm test                 # движок: node test/run.js — 78 герметичных тестов (без сети наружу)
+npm test                 # движок: node test/run.js — 106 герметичных тестов (без сети наружу)
 cd web && npm test       # фронт: node --test — маппинг сообщений об ошибках по кодам
 ```
 
