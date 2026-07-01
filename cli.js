@@ -8,11 +8,12 @@ async function main() {
   const args = process.argv.slice(2);
   const url = args.find((a) => !a.startsWith("--"));
   if (!url) {
-    console.error("Usage: node cli.js <url> [--allow-private] [--max=N] [--summary]");
+    console.error("Usage: node cli.js <url> [--deep] [--external] [--allow-private] [--max=N] [--summary]");
     process.exit(1);
   }
   const allowPrivate = args.includes("--allow-private");
   const checkExternal = args.includes("--external");
+  const deep = args.includes("--deep");
   const summary = args.includes("--summary");
   const maxArg = args.find((a) => a.startsWith("--max="));
   const maxPages = maxArg ? Number(maxArg.slice(6)) || 50 : 50;
@@ -20,6 +21,7 @@ async function main() {
   const report = await audit(url, {
     allowPrivate,
     checkExternal,
+    deep,
     maxPages,
     onProgress: (p) => {
       const line = `[${p.phase}] ${p.pagesCrawled}/${p.pagesDiscovered} ${p.currentUrl || ""}`;
@@ -31,7 +33,7 @@ async function main() {
   if (summary) {
     const s = report.score;
     console.log(`\n${report.meta.finalUrl}`);
-    console.log(`Общий балл: ${s.overall} (${s.grade})  ·  страниц: ${report.meta.pagesCrawled}/${report.meta.pagesDiscovered}${report.meta.flags.spa ? "  ·  SPA" : ""}`);
+    console.log(`Общий балл: ${s.overall} (${s.grade})  ·  страниц: ${report.meta.pagesCrawled}/${report.meta.pagesDiscovered}${report.meta.mode === "deep" ? "  ·  deep" : ""}${report.meta.flags.spa ? "  ·  SPA" : ""}`);
     for (const c of s.categories) {
       console.log(`  ${c.label.padEnd(20)} ${String(c.score).padStart(3)} (${c.grade})  крит ${c.issueCounts.critical} · важно ${c.issueCounts.warning} · инфо ${c.issueCounts.info}`);
     }
