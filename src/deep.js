@@ -208,13 +208,20 @@ async function renderOne(context, url, opts = {}) {
     try { timing = req.timing(); } catch (_) { /* not always available */ }
     const status = response.status();
     const axe = await runAxe(page, status);
+    // `bytes` must mean the TRANSFERRED document size (like the static crawler's
+    // decoded body length), NOT the serialized rendered DOM — otherwise a small SPA
+    // shell that renders into a large DOM gets a false "HTML too big" warning and
+    // pages[].bytes diverges from static mode. Fall back to Content-Length, then DOM.
+    let bytes = 0;
+    try { const buf = await response.body(); bytes = buf ? buf.length : 0; } catch (_) { bytes = 0; }
+    if (!bytes) bytes = Number(headers["content-length"] || 0) || Buffer.byteLength(html || "", "utf8");
     return {
       url,
       finalUrl: page.url(),
       status,
       redirectChain: await buildRedirectChain(req),
       ttfbMs: ttfbFromTiming(timing),
-      bytes: Buffer.byteLength(html || "", "utf8"),
+      bytes,
       contentType: headers["content-type"] || "text/html",
       contentEncoding: headers["content-encoding"] || null,
       page: status >= 200 && status < 300 && html ? parseHtml(html) : null,
@@ -318,7 +325,11 @@ async function deepCrawl(startUrl, opts = {}) {
       results.push(rec);
 
       if (rec.page) {
-        const baseUrl = rec.finalUrl;
+        // Honor <base href> for relative-link resolution, same as the static crawler
+        // (src/crawler.js) — otherwise deep discovers a different URL set than static.
+        const baseUrl = rec.page.base
+          ? (() => { try { return new URL(rec.page.base, rec.finalUrl).href; } catch (_) { return rec.finalUrl; } })()
+          : rec.finalUrl;
         for (const a of rec.page.anchors) {
           let norm = normalizeLink(a.href, baseUrl);
           if (!norm) continue;

@@ -2,6 +2,7 @@
 
 const { URL } = require("url");
 const { relPath, prevalence, count, htmlPages, uniq } = require("./util");
+const { canonicalize } = require("../crawler");
 
 module.exports = function tech(ctx) {
   const out = [];
@@ -30,9 +31,11 @@ module.exports = function tech(ctx) {
     for (const p of html) {
       for (const a of p.page.anchors) {
         if (!a.href) continue;
-        let abs;
-        try { abs = new URL(a.href, p.finalUrl || p.url).href; } catch (_) { continue; }
-        const tp = relPath(abs);
+        let absUrl;
+        try { absUrl = new URL(a.href, p.finalUrl || p.url); } catch (_) { continue; }
+        // Canonicalize the target the SAME way the crawler keys pages, so a link
+        // written "/team/" or "/blog/index.html" matches the stored "/team"/"/blog".
+        const tp = relPath(canonicalize(absUrl));
         if (brokenStatus.has(tp)) {
           brokenTargets.add(tp);
           srcPages.add(relPath(p.url));
@@ -72,11 +75,19 @@ module.exports = function tech(ctx) {
   const anchorPages = [];
   const anchorSamples = [];
   for (const p of html) {
-    const ids = new Set(Object.keys(p.page.idCounts));
-    const bad = p.page.anchors.filter((a) => a.href && a.href.startsWith("#") && a.href.length > 1 && !ids.has(a.href.slice(1)));
+    const targets = new Set(Object.keys(p.page.idCounts));
+    for (const n of p.page.names || []) targets.add(n); // <a name="…"> anchors are valid fragment targets too
+    const bad = p.page.anchors.filter((a) => {
+      if (!a.href || !a.href.startsWith("#") || a.href.length <= 1) return false;
+      const frag = a.href.slice(1);
+      if (frag.toLowerCase() === "top") return false; // "#top" = top of document per HTML spec
+      if (targets.has(frag)) return false;
+      let dec = frag; try { dec = decodeURIComponent(frag); } catch (_) { /* keep raw */ }
+      return !targets.has(dec); // non-ASCII ids are often percent-encoded in the href
+    });
     if (bad.length) { anchorDefects += bad.length; anchorPages.push(path(p)); anchorSamples.push(...bad.map((b) => b.href)); }
   }
-  if (anchorDefects) out.push(count({ id: "tech.broken-anchor", category: "tech", severity: "warning", title: "Битые якоря (#id)", detail: (n) => `${n} ссылок-якорей ведут на несуществующий id на странице.`, fix: "Проверьте id целевых блоков или поправьте ссылки оглавления." }, anchorDefects, anchorPages, uniq(anchorSamples)));
+  if (anchorDefects) out.push(count({ id: "tech.broken-anchor", category: "tech", severity: "warning", title: "Битые якоря (#id)", detail: (n) => `${n} ссылок-якорей ведут на несуществующий id/name на странице.`, fix: "Проверьте id/name целевых блоков или поправьте ссылки оглавления." }, anchorDefects, anchorPages, uniq(anchorSamples)));
 
   let tbDefects = 0;
   const tbPages = [];

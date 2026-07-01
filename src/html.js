@@ -27,7 +27,11 @@ function decodeEntities(s) {
     const lower = name.toLowerCase();
     if (lower[0] === "#") {
       const code = lower[1] === "x" ? parseInt(lower.slice(2), 16) : parseInt(lower.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+      // String.fromCodePoint throws RangeError for code < 0 or > 0x10FFFF. Per HTML5,
+      // an out-of-range reference is replaced with U+FFFD — the parser must NEVER throw
+      // (a single bad ref in text OR an attribute would otherwise abort the whole crawl).
+      if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return "�";
+      return String.fromCodePoint(code);
     }
     return Object.prototype.hasOwnProperty.call(ENTITIES, lower) ? ENTITIES[lower] : m;
   });
@@ -195,6 +199,7 @@ function parseHtml(html) {
     inlineStyles: [],
     headings: [],
     anchors: [],
+    names: [],
     images: [],
     scripts: [],
     jsonLd: [],
@@ -271,8 +276,9 @@ function parseHtml(html) {
           if (!cap) cap = { kind: "title", tag: "title", buf: "" };
           break;
         case "a": {
-          const anchor = { href: a.href || null, rel: a.rel || null, target: a.target || null, text: "" };
+          const anchor = { href: a.href || null, rel: a.rel || null, target: a.target || null, name: a.name || null, text: "" };
           page.anchors.push(anchor);
+          if (a.name) page.names.push(a.name); // <a name="…"> = valid fragment target (old-style anchors)
           if (!cap) cap = { kind: "anchor", tag: "a", ref: anchor, buf: "" };
           break;
         }
