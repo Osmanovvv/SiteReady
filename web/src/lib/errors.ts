@@ -9,6 +9,8 @@ export const ERROR_TEXT: Record<string, string> = {
   SSRF_BLOCKED: "Адрес заблокирован egress-защитой (похоже на внутренний ресурс).",
   TIMEOUT: "Сайт не ответил вовремя. Попробуйте ещё раз.",
   UNREACHABLE: "Не удалось подключиться к сайту.",
+  DEEP_UNAVAILABLE:
+    "Глубокий режим недоступен: на сервере не установлен браузер (npm i playwright && npx playwright install chromium).",
 };
 
 export const TRANSPORT_ERROR = "Соединение прервано. Проверьте сеть и повторите.";

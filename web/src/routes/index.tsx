@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ChevronDown, Gauge, ShieldCheck, Sparkles } from "lucide-react";
-import { isMockMode } from "@/lib/api";
+import { isMockMode, fetchCapabilities } from "@/lib/api";
 import { clearReport } from "@/lib/report-store";
 
 export const Route = createFileRoute("/")({
@@ -29,10 +29,16 @@ function StartPage() {
   const [limit, setLimit] = useState(50);
   const [checkExternal, setCheckExternal] = useState(false);
   const [allowLocal, setAllowLocal] = useState(false);
+  const [deep, setDeep] = useState(false);
+  const [deepAvailable, setDeepAvailable] = useState<boolean | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     headingRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    fetchCapabilities().then((c) => setDeepAvailable(c.deep));
   }, []);
 
   const onSubmit = (e: React.FormEvent) => {
@@ -44,7 +50,7 @@ function StartPage() {
     clearReport();
     navigate({
       to: "/progress",
-      search: { url: normalized, limit: safeLimit, checkExternal, allowLocal },
+      search: { url: normalized, limit: safeLimit, checkExternal, allowLocal, deep: deep && deepAvailable !== false },
     });
   };
 
@@ -115,6 +121,25 @@ function StartPage() {
 
             {showOptions && (
               <div className="mt-4 grid gap-4 rounded-lg bg-muted/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label htmlFor="deep" className="text-sm">
+                      Глубокий режим
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {deepAvailable === false
+                        ? "Недоступно на этом сервере — не установлен браузер (npm i playwright && npx playwright install chromium)."
+                        : "Рендер в реальном браузере — точнее для SPA (React/Vue), но медленнее."}
+                    </p>
+                  </div>
+                  <Switch
+                    id="deep"
+                    checked={deep && deepAvailable !== false}
+                    onCheckedChange={setDeep}
+                    disabled={deepAvailable === false}
+                    className="mt-0.5 shrink-0"
+                  />
+                </div>
                 <div>
                   <Label htmlFor="limit" className="text-sm">
                     Лимит страниц

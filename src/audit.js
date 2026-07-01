@@ -5,6 +5,7 @@
 
 const { URL } = require("url");
 const { crawl } = require("./crawler");
+const { deepCrawl, DEEP_MAX_PAGES } = require("./deep");
 const { fetch } = require("./fetcher");
 const { buildScore, gradeFromScore } = require("./score");
 const { relPath, htmlPages } = require("./checks/util");
@@ -90,8 +91,13 @@ async function audit(startUrl, opts = {}) {
   };
   const t0 = Date.now();
 
-  const crawlRes = await crawl(startUrl, {
+  // Deep mode renders each page in a real browser (PLAN-v2 §1) and reuses the same
+  // checks on the rendered DOM. It's heavier, so it crawls a smaller page budget.
+  const crawler = o.deep ? deepCrawl : crawl;
+  const crawlMaxPages = o.deep ? Math.min(o.maxPages, DEEP_MAX_PAGES) : o.maxPages;
+  const crawlRes = await crawler(startUrl, {
     ...o,
+    maxPages: crawlMaxPages,
     onProgress: (p) => emit("Обход", p.crawled, p.discovered, p.current),
   });
   const finalUrl = (crawlRes.pages.find((p) => p.page) || crawlRes.pages[0] || {}).finalUrl || crawlRes.startUrl;
@@ -110,7 +116,8 @@ async function audit(startUrl, opts = {}) {
   emit("Проверка ссылок", crawlRes.pagesCrawled, crawlRes.pagesDiscovered, null);
   const site = await gatherSite(crawlRes.startUrl, o);
   emit("Анализ", crawlRes.pagesCrawled, crawlRes.pagesDiscovered, null);
-  const spa = detectSpa(crawlRes.pages);
+  // In deep mode the DOM is real — SPA detection/reclassification is unnecessary.
+  const spa = o.deep ? false : detectSpa(crawlRes.pages);
 
   const ctx = {
     pages: crawlRes.pages,
@@ -176,6 +183,7 @@ async function audit(startUrl, opts = {}) {
       pagesCrawled: crawlRes.pagesCrawled,
       pagesDiscovered: crawlRes.pagesDiscovered,
       sampled: crawlRes.pagesCrawled < crawlRes.pagesDiscovered,
+      mode: o.deep ? "deep" : "static",
       flags: { spa },
     },
     score,

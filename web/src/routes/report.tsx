@@ -119,6 +119,11 @@ function QuickView({ report }: { report: Report }) {
             <div className="text-xl font-semibold break-all">{report.meta.finalUrl}</div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {report.meta.mode === "deep" && (
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                отрендерено браузером
+              </span>
+            )}
             {report.meta.sampled && (
               <span className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs">
                 выборка: {report.meta.pagesCrawled} из {report.meta.pagesDiscovered}

@@ -12,6 +12,7 @@ const path = require("path");
 const { URL } = require("url");
 const { audit } = require("./src/audit");
 const { assertHostAllowed } = require("./src/net-guard");
+const { isDeepAvailable, DEEP_MAX_PAGES } = require("./src/deep");
 
 const HOST = "127.0.0.1";
 const DEFAULT_PORT = Number(process.env.PORT) || 3000;
@@ -68,7 +69,16 @@ function handleAudit(req, res, params) {
 
   const allowPrivate = truthy(params.get("allowLocal"));
   const checkExternal = truthy(params.get("checkExternal"));
-  const maxPages = clampInt(params.get("limit"), 50, 1, 500);
+  const deep = truthy(params.get("deep"));
+  const maxPages = clampInt(params.get("limit"), deep ? 12 : 50, 1, deep ? DEEP_MAX_PAGES : 500);
+
+  if (deep && !isDeepAvailable()) {
+    send("error", {
+      code: "DEEP_UNAVAILABLE",
+      message: "Глубокий режим недоступен: на сервере не установлен браузер (npm i playwright && npx playwright install chromium).",
+    });
+    return res.end();
+  }
 
   // Up-front, clear error for a literal private/blocked host (hostnames are
   // still validated at resolve time inside the engine).
@@ -96,6 +106,7 @@ function handleAudit(req, res, params) {
     maxPages,
     allowPrivate,
     checkExternal,
+    deep,
     onProgress: (p) => { if (!aborted) send("progress", p); },
     signal: () => aborted,
   })
@@ -149,6 +160,10 @@ function createServer() {
     let u;
     try { u = new URL(req.url, "http://127.0.0.1"); } catch (_) { res.writeHead(400); return res.end("Bad request"); }
 
+    if (req.method === "GET" && u.pathname === "/api/capabilities") {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      return res.end(JSON.stringify({ deep: isDeepAvailable() }));
+    }
     if (req.method === "GET" && u.pathname === "/api/audit/stream") return handleAudit(req, res, u.searchParams);
     if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end("Method not allowed"); }
     if (hasFrontend) return serveStatic(req, res, u.pathname);

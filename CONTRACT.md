@@ -29,7 +29,8 @@ GET {API_BASE}/api/audit/stream?url=<сайт>&limit=50&checkExternal=1&allowLoc
 > `generatedAt` (конец). Имена различаются намеренно — это разные моменты, не опечатка.
 
 Коды ошибок (`error.code`): `BAD_URL`, `DNS_FAIL`, `PRIVATE_BLOCKED` (приватный адрес,
-нужен `allowLocal=1`), `SSRF_BLOCKED`, `TIMEOUT`, `UNREACHABLE`.
+нужен `allowLocal=1`), `SSRF_BLOCKED`, `TIMEOUT`, `UNREACHABLE`, `DEEP_UNAVAILABLE`
+(запрошен `deep`, но на сервере не установлен браузер).
 
 > На этапе Lovable стрим можно не подключать — рисуем по `sample-report.json`.
 > Прогресс-экран показываем на мок-таймере; реальный SSE подключим при интеграции.
@@ -41,6 +42,14 @@ GET {API_BASE}/api/audit/stream?url=<сайт>&limit=50&checkExternal=1&allowLoc
 - `limit` — лимит страниц обхода (по умолчанию 50, диапазон 1..500).
 - `checkExternal` — `1/0`, проверять ли внешние ссылки (по умолчанию выкл.).
 - `allowLocal` — `1/0`, разрешить приватные/localhost-адреса (для дев-аудита).
+- `deep` — `1/0`, глубокий режим: рендер каждой страницы в реальном браузере (v2, §1).
+  Точнее для SPA (React/Vue), но медленнее; меньший лимит страниц (≤25). Требует установленного
+  Playwright на сервере — иначе `error.code = DEEP_UNAVAILABLE`.
+  > **Egress в deep.** Запросы браузера (навигация, сабресурсы, WebSocket) к metadata/приватным
+  > IP блокируются перехватом: metadata — всегда, приватные — при `allowLocal=0`; при
+  > нескольких A-записях блок, если приватна хоть одна. Chromium резолвит DNS сам, поэтому
+  > остаётся окно DNS-rebinding (сервер может подменить IP между нашей проверкой и коннектом
+  > браузера) — это присуще браузерному рендеру; аудитируйте доверенные адреса.
 
 ---
 
@@ -56,7 +65,8 @@ GET {API_BASE}/api/audit/stream?url=<сайт>&limit=50&checkExternal=1&allowLoc
     "pagesCrawled": 50,
     "pagesDiscovered": 210,
     "sampled": true,                 // crawled < discovered → бейдж «выборка»
-    "flags": { "spa": false }        // true → баннер «статический аудит ограничен»
+    "mode": "static",                // "static" | "deep" (v2) — бейдж «отрендерено браузером» при deep
+    "flags": { "spa": false }        // true → баннер «статический аудит ограничен» (только в static)
   },
 
   "score": {

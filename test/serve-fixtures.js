@@ -104,6 +104,20 @@ function createServer() {
           "</body></html>"
       );
     }
+    if (p === "/soft-host") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      return res.end('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Хост-страница</title></head><body><h1>Главная</h1><a href="/soft404">Каталог</a></body></html>');
+    }
+    if (p === "/soft404") {
+      // 404 status but a full HTML body (a soft 404 — e.g. an SPA shell served for
+      // unknown routes). Body must exceed the 1.5 KB soft-error threshold.
+      res.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
+      return res.end(
+        '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Раздел каталога</title></head><body><div id="app"></div>' +
+          "<p>Наполнитель тела, чтобы превысить порог 1.5 КБ для детекта soft-404. </p>".repeat(40) +
+          "</body></html>"
+      );
+    }
     if (p === "/multibroken") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       return res.end('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Страница с повторной битой ссылкой в навигации</title></head><body><h1>Заголовок</h1><nav><a href="/missing-page">сюда</a><a href="/missing-page">и сюда</a><a href="/missing-page">и ещё раз</a></nav></body></html>');

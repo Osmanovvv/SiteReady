@@ -292,6 +292,12 @@ async function main() {
     );
   });
   await test("dead/4xx page rows are never scored 100", async () => { const r = await audit(base + "/dead", { allowPrivate: true, maxPages: 5 }); assert.ok(r.pages.every((p) => p.score === 0)); });
+  await test("soft-404: a linked 404 that serves a full HTML body is flagged", async () => {
+    const r = await audit(base + "/soft-host", { allowPrivate: true, maxPages: 5 });
+    const f = r.issues.find((i) => i.id === "tech.soft-error-status");
+    assert.ok(f, "no soft-error finding");
+    assert.ok(f.affectedCount >= 1 && f.sample.some((s) => /\/soft404 → 404/.test(s)));
+  });
 
   console.log("parser robustness (root-cause fixes):");
   await test("unclosed <h1> yields its text and non-zero textLength", () => {
@@ -362,6 +368,48 @@ async function main() {
     const r = await audit(base + "/ext-test", { allowPrivate: true, maxPages: 3 });
     assert.ok(!r.issues.some((i) => i.id === "tech.broken-link.external"));
   });
+
+  console.log("deep mode (PLAN-v2 §1):");
+  const { isDeepAvailable, ttfbFromTiming, buildRedirectChain, deepCrawl, isDocLink, hostAllowed } = require("../src/deep");
+  await test("hostAllowed: metadata always blocked, public allowed, private gated by allowLocal", async () => {
+    assert.strictEqual(await hostAllowed("169.254.169.254", true), false); // metadata even under allowLocal
+    assert.strictEqual(await hostAllowed("8.8.8.8", false), true);
+    assert.strictEqual(await hostAllowed("10.0.0.5", false), false);
+    assert.strictEqual(await hostAllowed("10.0.0.5", true), true);
+  });
+  await test("ttfbFromTiming: positive delta rounds; non-positive/missing → 0", () => {
+    assert.strictEqual(ttfbFromTiming({ requestStart: 10, responseStart: 35.6 }), 26);
+    assert.strictEqual(ttfbFromTiming({ requestStart: 50, responseStart: 50 }), 0);
+    assert.strictEqual(ttfbFromTiming(null), 0);
+  });
+  await test("isDocLink flags documents/binaries (probed statically, not rendered)", () => {
+    assert.ok(isDocLink("https://x/report.pdf"));
+    assert.ok(isDocLink("https://x/a/b/file.docx?v=2"));
+    assert.ok(isDocLink("https://x/archive.zip"));
+    assert.ok(!isDocLink("https://x/solutions"));
+    assert.ok(!isDocLink("https://x/page.html"));
+  });
+  await test("buildRedirectChain → ordered {url,status} hops (matches static redirectChain shape)", async () => {
+    const mk = (url, from, st) => ({ url: () => url, redirectedFrom: () => from, response: async () => (st ? { status: () => st } : null) });
+    const a = mk("https://a/", null, 301), b = mk("https://b/", a, 302), c = mk("https://c/", b, null);
+    assert.deepStrictEqual(await buildRedirectChain(c), [{ url: "https://a/", status: 301 }, { url: "https://b/", status: 302 }]);
+    assert.deepStrictEqual(await buildRedirectChain(a), []);
+  });
+  if (isDeepAvailable()) {
+    await test("[deep] renders a fixture in a real browser → mode=deep, no SPA flag, 5 categories", async () => {
+      const r = await audit(base + "/", { deep: true, allowPrivate: true, maxPages: 2 });
+      assert.strictEqual(r.meta.mode, "deep");
+      assert.strictEqual(r.meta.flags.spa, false);
+      assert.ok(r.pages[0].status === 200 && r.score.categories.length === 5);
+    });
+    await test("[deep] crawl yields static-shaped page records (page/contentType/bytes/status)", async () => {
+      const c = await deepCrawl(base + "/about.html", { allowPrivate: true, maxPages: 1, timeout: 20000 });
+      const p = c.pages[0];
+      assert.ok(p.page && typeof p.contentType === "string" && typeof p.bytes === "number" && p.status === 200);
+    });
+  } else {
+    console.log("  (browser tests skipped — Playwright not installed)");
+  }
 
   console.log("backend (server.js SSE wire format):");
   const engine = createEngineServer();
@@ -449,6 +497,23 @@ async function main() {
     const evs = await collectSSE(`http://127.0.0.1:${ePort}/api/audit/stream?url=`);
     const err = evs.find((e) => e.event === "error");
     assert.ok(err && err.parsed.code === "BAD_URL");
+  });
+  await test("GET /api/capabilities reports deep availability as a boolean", async () => {
+    const body = await new Promise((resolve) => {
+      http.get(`http://127.0.0.1:${ePort}/api/capabilities`, (r) => { let s = ""; r.setEncoding("utf8"); r.on("data", (d) => (s += d)); r.on("end", () => resolve(s)); });
+    });
+    assert.strictEqual(typeof JSON.parse(body).deep, "boolean");
+  });
+  await test("SSE with deep=1 but no browser → DEEP_UNAVAILABLE, audit never starts", async () => {
+    process.env.SITEREADY_NO_DEEP = "1";
+    try {
+      const evs = await collectSSE(`http://127.0.0.1:${ePort}/api/audit/stream?url=${encodeURIComponent(base + "/")}&deep=1&allowLocal=true`);
+      const err = evs.find((e) => e.event === "error");
+      assert.ok(err && err.parsed.code === "DEEP_UNAVAILABLE", "code=" + (err && err.parsed.code));
+      assert.ok(!evs.some((e) => e.event === "progress"), "audit must not start when deep is unavailable");
+    } finally {
+      delete process.env.SITEREADY_NO_DEEP;
+    }
   });
   await test("server serves the engine placeholder at /", async () => {
     const html = await new Promise((resolve) => {

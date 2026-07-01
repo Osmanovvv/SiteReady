@@ -54,6 +54,7 @@ export interface Report {
     pagesCrawled: number;
     pagesDiscovered: number;
     sampled: boolean;
+    mode?: "static" | "deep";
     flags: { spa: boolean };
   };
   score: {

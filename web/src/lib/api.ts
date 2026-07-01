@@ -7,6 +7,7 @@ export interface AuditOptions {
   limit?: number;
   checkExternal?: boolean;
   allowLocal?: boolean;
+  deep?: boolean;
 }
 
 export type ProgressEvent =
@@ -36,6 +37,7 @@ export function startAudit(opts: AuditOptions, onEvent: (e: ProgressEvent) => vo
     if (opts.limit != null) u.searchParams.set("limit", String(opts.limit));
     if (opts.checkExternal != null) u.searchParams.set("checkExternal", String(opts.checkExternal));
     if (opts.allowLocal != null) u.searchParams.set("allowLocal", String(opts.allowLocal));
+    if (opts.deep != null) u.searchParams.set("deep", String(opts.deep));
 
     const es = new EventSource(u.toString());
     es.addEventListener("meta", (ev) => {
@@ -161,4 +163,17 @@ export function startAudit(opts: AuditOptions, onEvent: (e: ProgressEvent) => vo
 
 export function isMockMode(): boolean {
   return !useRealBackend();
+}
+
+/** Server feature flags. In mock mode there is no server → deep is unavailable. */
+export async function fetchCapabilities(): Promise<{ deep: boolean }> {
+  if (!useRealBackend()) return { deep: false };
+  try {
+    const res = await fetch(new URL("/api/capabilities", streamBase()).toString());
+    if (!res.ok) return { deep: false };
+    const j = await res.json();
+    return { deep: !!j.deep };
+  } catch {
+    return { deep: false };
+  }
 }

@@ -181,4 +181,4 @@ async function crawl(startUrl, opts = {}) {
   };
 }
 
-module.exports = { crawl, normalizeLink, hostKey };
+module.exports = { crawl, normalizeLink, hostKey, canonicalize };

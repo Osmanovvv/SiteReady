@@ -9,6 +9,7 @@ interface Search {
   limit?: number;
   checkExternal?: boolean;
   allowLocal?: boolean;
+  deep?: boolean;
 }
 
 export const Route = createFileRoute("/progress")({
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/progress")({
     limit: s.limit != null ? Number(s.limit) : undefined,
     checkExternal: s.checkExternal === true || s.checkExternal === "true",
     allowLocal: s.allowLocal === true || s.allowLocal === "true",
+    deep: s.deep === true || s.deep === "true",
   }),
   head: () => ({ meta: [{ title: "Анализируем сайт — SiteReady" }] }),
   component: ProgressPage,
@@ -25,7 +27,7 @@ export const Route = createFileRoute("/progress")({
 const PHASES = ["Обход", "Проверка ссылок", "Анализ", "Готово"] as const;
 
 function ProgressPage() {
-  const { url, limit, checkExternal, allowLocal } = Route.useSearch();
+  const { url, limit, checkExternal, allowLocal, deep } = Route.useSearch();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState<string>("Обход");
@@ -50,7 +52,7 @@ function ProgressPage() {
     setErrorCode(undefined);
     maxPctRef.current = 0; // reset the monotonic clamp for a fresh audit
     let doneTimer: ReturnType<typeof setTimeout> | undefined;
-    const stop = startAudit({ url, limit, checkExternal, allowLocal }, (ev) => {
+    const stop = startAudit({ url, limit, checkExternal, allowLocal, deep }, (ev) => {
       if (ev.type === "meta") setPagesDiscovered(ev.pagesDiscovered);
       else if (ev.type === "progress") {
         setPhase(ev.phase);
@@ -72,7 +74,7 @@ function ProgressPage() {
       stop();
       if (doneTimer) clearTimeout(doneTimer);
     };
-  }, [url, limit, checkExternal, allowLocal, navigate]);
+  }, [url, limit, checkExternal, allowLocal, deep, navigate]);
 
   const phaseIndex = PHASES.indexOf(phase as (typeof PHASES)[number]);
   // Progress tracks phase progression, NOT crawl coverage: a sampled crawl covers
@@ -119,11 +121,21 @@ function ProgressPage() {
                 {errorCode === "PRIVATE_BLOCKED" && (
                   <button
                     onClick={() =>
-                      navigate({ to: "/progress", search: { url, limit, checkExternal, allowLocal: true } })
+                      navigate({ to: "/progress", search: { url, limit, checkExternal, allowLocal: true, deep } })
                     }
                     className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     Разрешить локальные адреса
+                  </button>
+                )}
+                {errorCode === "DEEP_UNAVAILABLE" && (
+                  <button
+                    onClick={() =>
+                      navigate({ to: "/progress", search: { url, limit, checkExternal, allowLocal, deep: false } })
+                    }
+                    className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                  >
+                    Повторить без глубокого режима
                   </button>
                 )}
                 <button

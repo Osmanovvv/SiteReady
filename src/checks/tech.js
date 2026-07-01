@@ -44,6 +44,14 @@ module.exports = function tech(ctx) {
     if (brokenTargets.size) out.push(count({ id: "tech.broken-link.internal", category: "tech", severity: "critical", title: "Битые внутренние ссылки (4xx/5xx)", detail: (n) => `Найдено ${n} битых целей внутренних ссылок${cov}.`, fix: "Исправьте или удалите ссылки, ведущие на 4xx/5xx." }, brokenTargets.size, [...srcPages], uniq(samples)));
   }
 
+  // Soft errors: a page returns 4xx/5xx but still serves a full HTML body (typically
+  // an SPA shell rendered client-side). Humans see content in the browser, but
+  // crawlers/search engines get the error status — so the page won't be indexed.
+  const softErrors = pages.filter((p) => p.status >= 400 && /text\/html/i.test(p.contentType || "") && (p.bytes || 0) > 1500);
+  if (softErrors.length) {
+    out.push(count({ id: "tech.soft-error-status", category: "tech", severity: "warning", title: "Контент со статусом ошибки (soft 404)", detail: (n) => `${n} стр. отдают полноценный HTML, но со статусом 4xx/5xx. В браузере (особенно SPA) контент виден, а поисковики и прямые заходы получают ошибку — страницы не индексируются.`, fix: "Настройте сервер/SPA-fallback: существующие страницы должны отдавать статус 200 (или серверный рендер маршрутов)." }, softErrors.length, softErrors.map(path), uniq(softErrors.map((p) => `${relPath(p.url)} → ${p.status}`))));
+  }
+
   if (startHttps) {
     const mixedResources = new Set(); // distinct http:// resource URLs — the penalty basis
     const mixedPages = [];
