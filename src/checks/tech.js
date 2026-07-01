@@ -86,5 +86,19 @@ module.exports = function tech(ctx) {
   }
   if (tbDefects) out.push(count({ id: "tech.noopener.missing", category: "tech", severity: "warning", title: "target=_blank без rel=noopener", detail: (n) => `${n} ссылок открываются в новой вкладке без rel="noopener".`, fix: 'Добавьте rel="noopener" к ссылкам с target="_blank".' }, tbDefects, tbPages));
 
+  // Deep-only: JS runtime errors captured while rendering in a real browser
+  // (severity by type — uncaught exception vs console.error). Present only in deep.
+  const jsWarn = { pages: [], count: 0, samples: [] };
+  const jsInfo = { pages: [], count: 0, samples: [] };
+  for (const p of pages) {
+    const errs = p.consoleErrors || [];
+    const uncaught = errs.filter((e) => e.type === "pageerror");
+    const logged = errs.filter((e) => e.type === "console");
+    if (uncaught.length) { jsWarn.pages.push(relPath(p.url)); jsWarn.count += uncaught.length; jsWarn.samples.push(...uncaught.map((e) => e.text)); }
+    if (logged.length) { jsInfo.pages.push(relPath(p.url)); jsInfo.count += logged.length; jsInfo.samples.push(...logged.map((e) => e.text)); }
+  }
+  if (jsWarn.count) out.push(count({ id: "tech.js-error", category: "tech", severity: "warning", title: "Ошибки JavaScript при рендере", detail: (n) => `${n} необработанных JS-ошибок в браузере — часть функционала может не работать.`, fix: "Исправьте исключения (DevTools → Console)." }, jsWarn.count, jsWarn.pages, uniq(jsWarn.samples)));
+  if (jsInfo.count) out.push(count({ id: "tech.js-console", category: "tech", severity: "info", title: "Ошибки в консоли (console.error)", detail: (n) => `${n} сообщений console.error при рендере — возможные проблемы страницы.`, fix: "Проверьте сообщения в консоли браузера." }, jsInfo.count, jsInfo.pages, uniq(jsInfo.samples)));
+
   return out;
 };

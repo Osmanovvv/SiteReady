@@ -370,7 +370,7 @@ async function main() {
   });
 
   console.log("deep mode (PLAN-v2 §1):");
-  const { isDeepAvailable, ttfbFromTiming, buildRedirectChain, deepCrawl, isDocLink, hostAllowed } = require("../src/deep");
+  const { isDeepAvailable, isAxeAvailable, ttfbFromTiming, buildRedirectChain, deepCrawl, isDocLink, hostAllowed } = require("../src/deep");
   await test("hostAllowed: metadata always blocked, public allowed, private gated by allowLocal", async () => {
     assert.strictEqual(await hostAllowed("169.254.169.254", true), false); // metadata even under allowLocal
     assert.strictEqual(await hostAllowed("8.8.8.8", false), true);
@@ -407,6 +407,21 @@ async function main() {
       const p = c.pages[0];
       assert.ok(p.page && typeof p.contentType === "string" && typeof p.bytes === "number" && p.status === 200);
     });
+    await test("[deep] JS-error page → tech.js-error (uncaught) + tech.js-console", async () => {
+      const r = await audit(base + "/js-error", { deep: true, allowPrivate: true, maxPages: 1 });
+      assert.ok(r.issues.some((i) => i.id === "tech.js-error"), "no js-error finding");
+      assert.ok(r.issues.some((i) => i.id === "tech.js-console"), "no js-console finding");
+    });
+    if (isAxeAvailable()) {
+      await test("[deep+axe] bad-contrast page → a11y.contrast + accessibility confidence=full", async () => {
+        const r = await audit(base + "/bad-contrast", { deep: true, allowPrivate: true, maxPages: 1 });
+        const f = r.issues.find((i) => i.id === "a11y.contrast");
+        assert.ok(f && f.affectedCount >= 1, "no contrast finding");
+        assert.strictEqual(r.score.categories.find((c) => c.key === "accessibility").confidence, "full");
+      });
+    } else {
+      console.log("  (axe tests skipped — axe-core not installed)");
+    }
   } else {
     console.log("  (browser tests skipped — Playwright not installed)");
   }

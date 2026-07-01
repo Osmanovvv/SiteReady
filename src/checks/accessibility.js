@@ -1,6 +1,6 @@
 "use strict";
 
-const { relPath, prevalence, htmlPages } = require("./util");
+const { relPath, prevalence, count, htmlPages, uniq } = require("./util");
 
 const GENERIC = new Set(["тут", "здесь", "подробнее", "читать далее", "ссылка", "сюда", "click here", "here", "подробно", "далее"]);
 
@@ -25,6 +25,17 @@ module.exports = function accessibility(ctx) {
 
   const generic = html.filter((p) => p.page.anchors.some((a) => a.text && GENERIC.has(a.text.toLowerCase()))).map(path);
   if (generic.length) out.push(prevalence({ id: "a11y.link-generic-text", category: "accessibility", severity: "info", title: "Неинформативные тексты ссылок", detail: (n) => `На ${n} стр. есть ссылки с текстом «тут»/«подробнее».`, fix: "Используйте осмысленный текст ссылки, описывающий её цель." }, generic));
+
+  // Deep-only: REAL colour contrast measured in the browser by axe-core (impossible
+  // statically). Pages carry p.axe.violations only when the audit ran in deep mode.
+  const contrastPages = [];
+  let contrastNodes = 0;
+  const contrastSamples = [];
+  for (const p of html) {
+    const v = p.axe && p.axe.violations && p.axe.violations.find((x) => x.id === "color-contrast");
+    if (v && v.nodes) { contrastPages.push(path(p)); contrastNodes += v.nodes; if (v.sample) contrastSamples.push(v.sample); }
+  }
+  if (contrastNodes) out.push(count({ id: "a11y.contrast", category: "accessibility", severity: "warning", title: "Недостаточный контраст текста", detail: (n) => `Найдено ${n} элементов с низким контрастом текста к фону (замерено в браузере). Плохо читается при слабом зрении и на ярком свете.`, fix: "Повысьте контраст до ≥4.5:1 для обычного текста и ≥3:1 для крупного." }, contrastNodes, contrastPages, uniq(contrastSamples)));
 
   return out;
 };

@@ -104,6 +104,16 @@ function createServer() {
           "</body></html>"
       );
     }
+    if (p === "/js-error") {
+      // Intentional uncaught exception + a console.error — for deep JS-console checks.
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      return res.end('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Страница с JS-ошибкой</title></head><body><h1>Тест</h1><p>Контент страницы.</p><script>console.error("тестовая ошибка в консоли");throw new Error("намеренная необработанная ошибка");</script></body></html>');
+    }
+    if (p === "/bad-contrast") {
+      // Very low contrast (#ccc on #fff ≈ 1.6:1) — axe color-contrast must flag it.
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      return res.end('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Плохой контраст</title></head><body style="background:#ffffff"><h1 style="color:#bbbbbb">Заголовок с плохим контрастом</h1><p style="color:#cccccc">Этот текст имеет очень низкий контраст к белому фону и должен быть найден axe-core как нарушение color-contrast.</p></body></html>');
+    }
     if (p === "/soft-host") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       return res.end('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Хост-страница</title></head><body><h1>Главная</h1><a href="/soft404">Каталог</a></body></html>');

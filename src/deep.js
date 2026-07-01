@@ -69,6 +69,41 @@ function isDeepAvailable() {
   }
 }
 
+// axe-core (optional, like Playwright) for REAL a11y measurement in the browser —
+// primarily colour contrast, which is impossible statically. Lazy-read once; if the
+// package isn't installed, deep still works (the axe checks are simply skipped).
+let AXE_SOURCE;
+function getAxeSource() {
+  if (AXE_SOURCE !== undefined) return AXE_SOURCE;
+  try { AXE_SOURCE = fs.readFileSync(require.resolve("axe-core"), "utf8"); }
+  catch (_) { AXE_SOURCE = false; }
+  return AXE_SOURCE;
+}
+function isAxeAvailable() { return getAxeSource() !== false; }
+
+async function runAxe(page, status) {
+  const src = getAxeSource();
+  if (!src || status < 200 || status >= 300) return null;
+  try {
+    await page.addScriptTag({ content: src });
+    return await page.evaluate(async () => {
+      // color-contrast only: it's the deep-unique signal (static can't compute it),
+      // and it avoids double-counting alt/lang rules the static checks already cover.
+      const r = await window.axe.run(document, { runOnly: { type: "rule", values: ["color-contrast"] } });
+      return {
+        violations: (r.violations || []).map((v) => ({
+          id: v.id,
+          impact: v.impact || "",
+          nodes: v.nodes.length,
+          sample: (v.nodes[0] && v.nodes[0].target && String(v.nodes[0].target[0] || "")) || "",
+        })),
+      };
+    });
+  } catch (_) {
+    return null; // axe failed on this page — skip, don't sink the render
+  }
+}
+
 // Browser-side egress guard — the analogue of net-guard's lookup pin. Chromium does
 // its own DNS, so we enforce the same policy at the request-interception layer:
 // abort any request that resolves to a metadata IP (ALWAYS) or a private IP (unless
@@ -167,6 +202,7 @@ async function renderOne(context, url, opts = {}) {
     let timing = null;
     try { timing = req.timing(); } catch (_) { /* not always available */ }
     const status = response.status();
+    const axe = await runAxe(page, status);
     return {
       url,
       finalUrl: page.url(),
@@ -178,6 +214,7 @@ async function renderOne(context, url, opts = {}) {
       contentEncoding: headers["content-encoding"] || null,
       page: status >= 200 && status < 300 && html ? parseHtml(html) : null,
       consoleErrors,
+      axe,
       error: null,
     };
   } finally {
@@ -287,4 +324,4 @@ async function deepCrawl(startUrl, opts = {}) {
   }
 }
 
-module.exports = { isDeepAvailable, getPlaywright, deepCrawl, renderOne, installEgressGuard, hostAllowed, ttfbFromTiming, buildRedirectChain, isDocLink, probeStatic, DEEP_MAX_PAGES };
+module.exports = { isDeepAvailable, isAxeAvailable, getPlaywright, deepCrawl, renderOne, installEgressGuard, hostAllowed, ttfbFromTiming, buildRedirectChain, isDocLink, probeStatic, DEEP_MAX_PAGES };

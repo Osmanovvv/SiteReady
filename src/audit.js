@@ -172,6 +172,12 @@ async function audit(startUrl, opts = {}) {
     for (const c of score.categories) { c.score = 0; c.grade = "F"; }
   }
 
+  // Deep + axe measured real contrast in the browser → a11y confidence is now full.
+  if (o.deep && crawlRes.pages.some((p) => p.axe)) {
+    const a11y = score.categories.find((c) => c.key === "accessibility");
+    if (a11y) { a11y.confidence = "full"; a11y.confidenceNote = "контраст измерен в браузере (axe-core)"; }
+  }
+
   emit("Готово", crawlRes.pagesCrawled, crawlRes.pagesDiscovered, null);
 
   return {
