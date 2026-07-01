@@ -1,6 +1,6 @@
 "use strict";
 
-const { relPath, prevalence, htmlPages } = require("./util");
+const { relPath, prevalence, count, htmlPages } = require("./util");
 
 module.exports = function performance(ctx) {
   const out = [];
@@ -42,6 +42,22 @@ module.exports = function performance(ctx) {
   const lazyPages = [];
   for (const p of html) { if (p.page.images.some((im) => im.loading !== "lazy")) lazyPages.push(path(p)); }
   if (lazyPages.length) out.push(prevalence({ id: "perf.img-no-lazy", category: "performance", severity: "info", title: "Картинки без lazy-load", detail: (n) => `На ${n} стр. есть картинки без loading="lazy".`, fix: 'Добавьте loading="lazy" к изображениям ниже первого экрана.' }, lazyPages));
+
+  // Real Core Web Vitals from Lighthouse (deep §1) — replaces the "estimated" caveat.
+  const lh = ctx.lighthouse;
+  if (lh) {
+    const startPath = relPath(ctx.finalUrl || ctx.startUrl);
+    const parts = [];
+    if (lh.score != null) parts.push(`оценка ${lh.score}/100`);
+    if (lh.lcp != null) parts.push(`LCP ${(lh.lcp / 1000).toFixed(1)}с`);
+    if (lh.cls != null) parts.push(`CLS ${lh.cls}`);
+    if (lh.tbt != null) parts.push(`TBT ${lh.tbt} мс`);
+    if (lh.fcp != null) parts.push(`FCP ${(lh.fcp / 1000).toFixed(1)}с`);
+    out.push({ id: "perf.lighthouse", category: "performance", severity: "info", title: "Метрики скорости (Lighthouse)", detail: `Реальные метрики на главной: ${parts.join(" · ")}.`, fix: "Смотрите отдельные предупреждения по конкретным метрикам ниже.", mode: "count", scored: false, penalty: 0, affectedCount: 1, affectedPages: [startPath], sample: parts });
+    if (lh.lcp != null && lh.lcp > 2500) out.push(count({ id: "perf.lcp", category: "performance", severity: "warning", title: "Медленная отрисовка контента (LCP)", detail: () => `LCP ${(lh.lcp / 1000).toFixed(1)}с — больше рекомендуемых 2.5с (замер в браузере).`, fix: "Оптимизируйте главное изображение и шрифты, уберите рендер-блок, ускорьте сервер." }, 1, [startPath], [`LCP ${lh.lcp} мс`]));
+    if (lh.cls != null && lh.cls > 0.1) out.push(count({ id: "perf.cls", category: "performance", severity: "warning", title: "Скачки вёрстки (CLS)", detail: () => `CLS ${lh.cls} — больше рекомендуемых 0.1 (замер в браузере).`, fix: "Задайте размеры картинкам и встраиваниям, резервируйте место под динамический контент." }, 1, [startPath], [`CLS ${lh.cls}`]));
+    if (lh.tbt != null && lh.tbt > 200) out.push(count({ id: "perf.tbt", category: "performance", severity: "warning", title: "Долгая блокировка потока (TBT)", detail: () => `TBT ${lh.tbt} мс — больше рекомендуемых 200 мс (замер в браузере).`, fix: "Уменьшите объём и время выполнения JavaScript, разбейте длинные задачи." }, 1, [startPath], [`TBT ${lh.tbt} мс`]));
+  }
 
   return out;
 };

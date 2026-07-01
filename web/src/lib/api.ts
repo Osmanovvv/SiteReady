@@ -8,6 +8,7 @@ export interface AuditOptions {
   checkExternal?: boolean;
   allowLocal?: boolean;
   deep?: boolean;
+  lighthouse?: boolean;
   token?: string; // one-time session token (auth flow) — replaces url/params in the SSE
   auth?: { cookie?: string; headers?: Record<string, string> };
 }
@@ -45,6 +46,7 @@ export function startAudit(opts: AuditOptions, onEvent: (e: ProgressEvent) => vo
       if (opts.checkExternal != null) u.searchParams.set("checkExternal", String(opts.checkExternal));
       if (opts.allowLocal != null) u.searchParams.set("allowLocal", String(opts.allowLocal));
       if (opts.deep != null) u.searchParams.set("deep", String(opts.deep));
+      if (opts.lighthouse != null) u.searchParams.set("lighthouse", String(opts.lighthouse));
     }
 
     const es = new EventSource(u.toString());
@@ -233,6 +235,7 @@ export async function prepareAudit(opts: {
   checkExternal?: boolean;
   allowLocal?: boolean;
   deep?: boolean;
+  lighthouse?: boolean;
   auth?: { cookie?: string; headers?: Record<string, string> };
 }): Promise<string | null> {
   if (!useRealBackend()) return null;
@@ -251,14 +254,14 @@ export async function prepareAudit(opts: {
 }
 
 /** Server feature flags. In mock mode there is no server → deep is unavailable. */
-export async function fetchCapabilities(): Promise<{ deep: boolean }> {
-  if (!useRealBackend()) return { deep: false };
+export async function fetchCapabilities(): Promise<{ deep: boolean; lighthouse: boolean }> {
+  if (!useRealBackend()) return { deep: false, lighthouse: false };
   try {
     const res = await fetch(new URL("/api/capabilities", streamBase()).toString());
-    if (!res.ok) return { deep: false };
+    if (!res.ok) return { deep: false, lighthouse: false };
     const j = await res.json();
-    return { deep: !!j.deep };
+    return { deep: !!j.deep, lighthouse: !!j.lighthouse };
   } catch {
-    return { deep: false };
+    return { deep: false, lighthouse: false };
   }
 }

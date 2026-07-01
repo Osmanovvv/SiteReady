@@ -432,6 +432,30 @@ async function main() {
     console.log("  (browser tests skipped — Playwright not installed)");
   }
 
+  console.log("lighthouse — real performance (PLAN-v2 §1):");
+  const perfCheck = require("../src/checks/performance");
+  const { isLighthouseAvailable } = require("../src/lighthouse");
+  await test("lighthouse findings: summary (info) always, CWV warnings only when poor", () => {
+    const bad = perfCheck({ pages: [], finalUrl: "https://x/", lighthouse: { score: 40, lcp: 4000, cls: 0.3, tbt: 500, fcp: 2000 } });
+    const ids = bad.map((f) => f.id);
+    assert.ok(["perf.lighthouse", "perf.lcp", "perf.cls", "perf.tbt"].every((x) => ids.includes(x)), "missing: " + ids.join());
+    assert.strictEqual(bad.find((f) => f.id === "perf.lighthouse").scored, false);
+    const good = perfCheck({ pages: [], finalUrl: "https://x/", lighthouse: { score: 95, lcp: 1200, cls: 0.02, tbt: 50, fcp: 800 } }).map((f) => f.id);
+    assert.ok(good.includes("perf.lighthouse") && !good.includes("perf.lcp") && !good.includes("perf.cls") && !good.includes("perf.tbt"));
+  });
+  await test("no lighthouse data → no lighthouse findings", () => {
+    assert.ok(!perfCheck({ pages: [], finalUrl: "https://x/" }).some((f) => f.id === "perf.lighthouse"));
+  });
+  if (isLighthouseAvailable()) {
+    await test("[lighthouse] real run on a fixture → perf.lighthouse finding + perf confidence full", async () => {
+      const r = await audit(base + "/", { lighthouse: true, allowPrivate: true, maxPages: 1 });
+      assert.ok(r.issues.some((i) => i.id === "perf.lighthouse"), "no lighthouse finding");
+      assert.strictEqual(r.score.categories.find((c) => c.key === "performance").confidence, "full");
+    });
+  } else {
+    console.log("  (lighthouse smoke skipped — not installed)");
+  }
+
   console.log("auth — login-protected pages (PLAN-v2 §4):");
   await test("protected page: 401 without auth, 200 with cookie", async () => {
     const no = await audit(base + "/protected", { allowPrivate: true, maxPages: 1 });

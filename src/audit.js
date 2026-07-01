@@ -6,6 +6,7 @@
 const { URL } = require("url");
 const { crawl } = require("./crawler");
 const { deepCrawl, DEEP_MAX_PAGES } = require("./deep");
+const { runLighthouse } = require("./lighthouse");
 const { fetch } = require("./fetcher");
 const { buildScore, gradeFromScore } = require("./score");
 const { relPath, htmlPages } = require("./checks/util");
@@ -119,12 +120,19 @@ async function audit(startUrl, opts = {}) {
   // In deep mode the DOM is real — SPA detection/reclassification is unnecessary.
   const spa = o.deep ? false : detectSpa(crawlRes.pages);
 
+  // Real performance metrics via Lighthouse (opt-in, slow) on the reachable start page.
+  let lighthouse = null;
+  if (o.lighthouse && crawlRes.pages.some((p) => p.page)) {
+    try { lighthouse = await runLighthouse(finalUrl, { allowPrivate: o.allowPrivate }); } catch (_) { /* best-effort */ }
+  }
+
   const ctx = {
     pages: crawlRes.pages,
     site,
     spa,
     startUrl: crawlRes.startUrl,
     finalUrl,
+    lighthouse,
     pagesCrawled: crawlRes.pagesCrawled,
     sampled: crawlRes.sampled,
   };
@@ -176,6 +184,10 @@ async function audit(startUrl, opts = {}) {
   if (o.deep && crawlRes.pages.some((p) => p.axe)) {
     const a11y = score.categories.find((c) => c.key === "accessibility");
     if (a11y) { a11y.confidence = "full"; a11y.confidenceNote = "контраст измерен в браузере (axe-core)"; }
+  }
+  if (o.lighthouse && lighthouse) {
+    const perf = score.categories.find((c) => c.key === "performance");
+    if (perf) { perf.confidence = "full"; perf.confidenceNote = "метрики измерены Lighthouse в браузере"; }
   }
 
   emit("Готово", crawlRes.pagesCrawled, crawlRes.pagesDiscovered, null);

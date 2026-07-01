@@ -43,6 +43,8 @@ function StartPage() {
   const [allowLocal, setAllowLocal] = useState(false);
   const [deep, setDeep] = useState(false);
   const [deepAvailable, setDeepAvailable] = useState<boolean | null>(null);
+  const [lighthouse, setLighthouse] = useState(false);
+  const [lighthouseAvailable, setLighthouseAvailable] = useState<boolean | null>(null);
   const [cookie, setCookie] = useState("");
   const [headersText, setHeadersText] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -52,7 +54,10 @@ function StartPage() {
   }, []);
 
   useEffect(() => {
-    fetchCapabilities().then((c) => setDeepAvailable(c.deep));
+    fetchCapabilities().then((c) => {
+      setDeepAvailable(c.deep);
+      setLighthouseAvailable(c.lighthouse);
+    });
   }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -62,6 +67,7 @@ function StartPage() {
     const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
     const safeLimit = Number.isFinite(limit) && limit >= 1 ? Math.min(500, Math.floor(limit)) : 50;
     const effectiveDeep = deep && deepAvailable !== false;
+    const effectiveLighthouse = lighthouse && lighthouseAvailable !== false;
     clearReport();
 
     const headers = parseHeaders(headersText);
@@ -75,6 +81,7 @@ function StartPage() {
         checkExternal,
         allowLocal,
         deep: effectiveDeep,
+        lighthouse: effectiveLighthouse,
         auth: { cookie: cookie.trim() || undefined, headers: Object.keys(headers).length ? headers : undefined },
       });
       if (token) {
@@ -84,7 +91,7 @@ function StartPage() {
     }
     navigate({
       to: "/progress",
-      search: { url: normalized, limit: safeLimit, checkExternal, allowLocal, deep: effectiveDeep },
+      search: { url: normalized, limit: safeLimit, checkExternal, allowLocal, deep: effectiveDeep, lighthouse: effectiveLighthouse },
     });
   };
 
@@ -171,6 +178,25 @@ function StartPage() {
                     checked={deep && deepAvailable !== false}
                     onCheckedChange={setDeep}
                     disabled={deepAvailable === false}
+                    className="mt-0.5 shrink-0"
+                  />
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label htmlFor="lighthouse" className="text-sm">
+                      Реальные метрики (Lighthouse)
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {lighthouseAvailable === false
+                        ? "Недоступно на этом сервере — не установлен Lighthouse (npm i lighthouse chrome-launcher)."
+                        : "Настоящие Core Web Vitals (LCP / CLS / TBT) на главной — самый медленный шаг."}
+                    </p>
+                  </div>
+                  <Switch
+                    id="lighthouse"
+                    checked={lighthouse && lighthouseAvailable !== false}
+                    onCheckedChange={setLighthouse}
+                    disabled={lighthouseAvailable === false}
                     className="mt-0.5 shrink-0"
                   />
                 </div>

@@ -14,6 +14,7 @@ const { URL } = require("url");
 const { audit } = require("./src/audit");
 const { assertHostAllowed } = require("./src/net-guard");
 const { isDeepAvailable, DEEP_MAX_PAGES } = require("./src/deep");
+const { isLighthouseAvailable } = require("./src/lighthouse");
 const { saveAudit, listHistory, getAudit, diffReports } = require("./src/store");
 
 function sendJson(res, data, status = 200) {
@@ -105,6 +106,7 @@ function optsFromInput(input, isDeep) {
     allowPrivate: !!input.allowLocal,
     checkExternal: !!input.checkExternal,
     deep,
+    lighthouse: !!input.lighthouse,
     maxPages: clampInt(input.limit, deep ? 12 : 50, 1, deep ? DEEP_MAX_PAGES : 500),
     auth: normalizeAuth(input.auth),
   };
@@ -146,7 +148,7 @@ function handleAudit(req, res, params) {
   } else {
     const urlObj = normalizeInput(params.get("url"));
     if (!urlObj) { send("error", { code: "BAD_URL", message: "Некорректный URL" }); return res.end(); }
-    opts = { urlHref: urlObj.href, startUrl: params.get("url"), ...optsFromInput({ allowLocal: truthy(params.get("allowLocal")), checkExternal: truthy(params.get("checkExternal")), limit: params.get("limit") }, truthy(params.get("deep"))) };
+    opts = { urlHref: urlObj.href, startUrl: params.get("url"), ...optsFromInput({ allowLocal: truthy(params.get("allowLocal")), checkExternal: truthy(params.get("checkExternal")), limit: params.get("limit"), lighthouse: truthy(params.get("lighthouse")) }, truthy(params.get("deep"))) };
   }
 
   if (opts.deep && !isDeepAvailable()) {
@@ -172,6 +174,7 @@ function handleAudit(req, res, params) {
     allowPrivate: opts.allowPrivate,
     checkExternal: opts.checkExternal,
     deep: opts.deep,
+    lighthouse: opts.lighthouse,
     auth: opts.auth,
     onProgress: (p) => { if (!aborted) send("progress", p); },
     signal: () => aborted,
@@ -229,7 +232,7 @@ function createServer() {
 
     if (req.method === "GET" && u.pathname === "/api/capabilities") {
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-      return res.end(JSON.stringify({ deep: isDeepAvailable() }));
+      return res.end(JSON.stringify({ deep: isDeepAvailable(), lighthouse: isLighthouseAvailable() }));
     }
     if (req.method === "GET" && u.pathname === "/api/history") {
       return void listHistory(u.searchParams.get("url")).then((h) => sendJson(res, h)).catch(() => sendJson(res, [], 500));

@@ -8,12 +8,13 @@ async function main() {
   const args = process.argv.slice(2);
   const url = args.find((a) => !a.startsWith("--"));
   if (!url) {
-    console.error("Usage: node cli.js <url> [--deep] [--external] [--allow-private] [--max=N] [--summary]");
+    console.error("Usage: node cli.js <url> [--deep] [--lighthouse] [--external] [--allow-private] [--max=N] [--summary]");
     process.exit(1);
   }
   const allowPrivate = args.includes("--allow-private");
   const checkExternal = args.includes("--external");
   const deep = args.includes("--deep");
+  const lighthouse = args.includes("--lighthouse");
   const summary = args.includes("--summary");
   const maxArg = args.find((a) => a.startsWith("--max="));
   const maxPages = maxArg ? Number(maxArg.slice(6)) || 50 : 50;
@@ -22,6 +23,7 @@ async function main() {
     allowPrivate,
     checkExternal,
     deep,
+    lighthouse,
     maxPages,
     onProgress: (p) => {
       const line = `[${p.phase}] ${p.pagesCrawled}/${p.pagesDiscovered} ${p.currentUrl || ""}`;

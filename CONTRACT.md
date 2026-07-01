@@ -54,6 +54,12 @@ GET {API_BASE}/api/audit/stream?url=<сайт>&limit=50&checkExternal=1&allowLoc
   > текста (axe-core), при этом категория a11y получает `confidence: "full"`;
   > `tech.js-error` (необработанные JS-исключения) и `tech.js-console` (`console.error`).
   > Это обычные issue — старый фронт просто отрисует их в общем списке.
+- `lighthouse` — `1/0`, реальные метрики скорости через Lighthouse на главной странице
+  (Core Web Vitals: LCP/CLS/TBT). Самый медленный шаг; требует установленных `lighthouse`
+  + `chrome-launcher` — иначе флаг игнорируется. При прогоне перф получает
+  `confidence: "full"`, добавляются находки `perf.lighthouse` (сводка, info) и
+  `perf.lcp/cls/tbt` (warning при плохих метриках). `GET /api/capabilities` возвращает
+  `{ deep, lighthouse }` — фронт показывает тоггл активным только при доступности.
 - **Авторизация (закрытые страницы, v2 §4).** Креды НЕ передаются в URL. Поток:
   `POST /api/audit/prepare` с телом `{ url, limit, deep, allowLocal, checkExternal,
   auth: { cookie, headers } }` → `{ token }` (одноразовый, TTL ~2 мин). Затем

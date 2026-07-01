@@ -10,6 +10,7 @@ interface Search {
   checkExternal?: boolean;
   allowLocal?: boolean;
   deep?: boolean;
+  lighthouse?: boolean;
   token?: string;
 }
 
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/progress")({
     checkExternal: s.checkExternal === true || s.checkExternal === "true",
     allowLocal: s.allowLocal === true || s.allowLocal === "true",
     deep: s.deep === true || s.deep === "true",
+    lighthouse: s.lighthouse === true || s.lighthouse === "true",
     token: s.token != null ? String(s.token) : undefined,
   }),
   head: () => ({ meta: [{ title: "Анализируем сайт — SiteReady" }] }),
@@ -29,7 +31,7 @@ export const Route = createFileRoute("/progress")({
 const PHASES = ["Обход", "Проверка ссылок", "Анализ", "Готово"] as const;
 
 function ProgressPage() {
-  const { url, limit, checkExternal, allowLocal, deep, token } = Route.useSearch();
+  const { url, limit, checkExternal, allowLocal, deep, lighthouse, token } = Route.useSearch();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState<string>("Обход");
@@ -54,7 +56,7 @@ function ProgressPage() {
     setErrorCode(undefined);
     maxPctRef.current = 0; // reset the monotonic clamp for a fresh audit
     let doneTimer: ReturnType<typeof setTimeout> | undefined;
-    const stop = startAudit({ url, limit, checkExternal, allowLocal, deep, token }, (ev) => {
+    const stop = startAudit({ url, limit, checkExternal, allowLocal, deep, lighthouse, token }, (ev) => {
       if (ev.type === "meta") setPagesDiscovered(ev.pagesDiscovered);
       else if (ev.type === "progress") {
         setPhase(ev.phase);
@@ -76,7 +78,7 @@ function ProgressPage() {
       stop();
       if (doneTimer) clearTimeout(doneTimer);
     };
-  }, [url, limit, checkExternal, allowLocal, deep, token, navigate]);
+  }, [url, limit, checkExternal, allowLocal, deep, lighthouse, token, navigate]);
 
   const phaseIndex = PHASES.indexOf(phase as (typeof PHASES)[number]);
   // Progress tracks phase progression, NOT crawl coverage: a sampled crawl covers
