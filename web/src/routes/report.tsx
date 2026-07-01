@@ -133,6 +133,13 @@ function QuickView({ report }: { report: Report }) {
               длительность: {formatDuration(report.meta.durationMs)}
             </span>
           </div>
+          <Link
+            to="/history"
+            search={{ url: report.meta.finalUrl }}
+            className="no-print text-sm text-primary hover:underline w-fit"
+          >
+            История аудитов этого адреса →
+          </Link>
           {report.meta.flags.spa && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-sm">
               <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" />

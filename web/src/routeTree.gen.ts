@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ReportRouteImport } from './routes/report'
 import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as HistoryRouteImport } from './routes/history'
+import { Route as DiffRouteImport } from './routes/diff'
 import { Route as IndexRouteImport } from './routes/index'
 
 const ReportRoute = ReportRouteImport.update({
@@ -23,6 +25,16 @@ const ProgressRoute = ProgressRouteImport.update({
   path: '/progress',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiffRoute = DiffRouteImport.update({
+  id: '/diff',
+  path: '/diff',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,30 +43,38 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/diff': typeof DiffRoute
+  '/history': typeof HistoryRoute
   '/progress': typeof ProgressRoute
   '/report': typeof ReportRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/diff': typeof DiffRoute
+  '/history': typeof HistoryRoute
   '/progress': typeof ProgressRoute
   '/report': typeof ReportRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/diff': typeof DiffRoute
+  '/history': typeof HistoryRoute
   '/progress': typeof ProgressRoute
   '/report': typeof ReportRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/progress' | '/report'
+  fullPaths: '/' | '/diff' | '/history' | '/progress' | '/report'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/progress' | '/report'
-  id: '__root__' | '/' | '/progress' | '/report'
+  to: '/' | '/diff' | '/history' | '/progress' | '/report'
+  id: '__root__' | '/' | '/diff' | '/history' | '/progress' | '/report'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DiffRoute: typeof DiffRoute
+  HistoryRoute: typeof HistoryRoute
   ProgressRoute: typeof ProgressRoute
   ReportRoute: typeof ReportRoute
 }
@@ -75,6 +95,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProgressRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diff': {
+      id: '/diff'
+      path: '/diff'
+      fullPath: '/diff'
+      preLoaderRoute: typeof DiffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +121,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DiffRoute: DiffRoute,
+  HistoryRoute: HistoryRoute,
   ProgressRoute: ProgressRoute,
   ReportRoute: ReportRoute,
 }

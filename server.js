@@ -13,6 +13,22 @@ const { URL } = require("url");
 const { audit } = require("./src/audit");
 const { assertHostAllowed } = require("./src/net-guard");
 const { isDeepAvailable, DEEP_MAX_PAGES } = require("./src/deep");
+const { saveAudit, listHistory, getAudit, diffReports } = require("./src/store");
+
+function sendJson(res, data, status = 200) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(data));
+}
+async function handleDiff(res, aId, bId) {
+  try {
+    const [a, b] = await Promise.all([getAudit(aId), getAudit(bId)]);
+    if (!a || !b) return sendJson(res, { error: "not found" }, 404);
+    const [older, newer] = a.meta.generatedAt <= b.meta.generatedAt ? [a, b] : [b, a];
+    sendJson(res, diffReports(older, newer));
+  } catch (_) {
+    sendJson(res, { error: "error" }, 500);
+  }
+}
 
 const HOST = "127.0.0.1";
 const DEFAULT_PORT = Number(process.env.PORT) || 3000;
@@ -114,6 +130,7 @@ function handleAudit(req, res, params) {
       if (aborted) return;
       send("done", report); // CONTRACT: the Report object itself, no wrapper
       res.end();
+      saveAudit(report); // best-effort history persistence (PLAN-v2 §2)
     })
     .catch((e) => {
       if (aborted) return;
@@ -163,6 +180,15 @@ function createServer() {
     if (req.method === "GET" && u.pathname === "/api/capabilities") {
       res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
       return res.end(JSON.stringify({ deep: isDeepAvailable() }));
+    }
+    if (req.method === "GET" && u.pathname === "/api/history") {
+      return void listHistory(u.searchParams.get("url")).then((h) => sendJson(res, h)).catch(() => sendJson(res, [], 500));
+    }
+    if (req.method === "GET" && u.pathname === "/api/report") {
+      return void getAudit(u.searchParams.get("id")).then((r) => (r ? sendJson(res, r) : sendJson(res, { error: "not found" }, 404))).catch(() => sendJson(res, { error: "error" }, 500));
+    }
+    if (req.method === "GET" && u.pathname === "/api/diff") {
+      return void handleDiff(res, u.searchParams.get("a"), u.searchParams.get("b"));
     }
     if (req.method === "GET" && u.pathname === "/api/audit/stream") return handleAudit(req, res, u.searchParams);
     if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end("Method not allowed"); }

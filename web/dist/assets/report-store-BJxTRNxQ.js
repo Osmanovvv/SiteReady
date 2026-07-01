@@ -1,0 +1,1 @@
+import{n as e}from"./createLucideIcon-Bus_EY1t.js";var t=`siteready:report`;function n(e){try{sessionStorage.setItem(t,JSON.stringify(e))}catch{}}function r(){try{let n=sessionStorage.getItem(t);if(!n)return null;let r=JSON.parse(n);return e(r)?r:null}catch{return null}}function i(){try{sessionStorage.removeItem(t)}catch{}}export{r as n,n as r,i as t};

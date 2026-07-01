@@ -165,6 +165,56 @@ export function isMockMode(): boolean {
   return !useRealBackend();
 }
 
+export interface HistoryRun {
+  id: string;
+  url: string;
+  generatedAt: string;
+  overall: number;
+  grade: string;
+  mode: "static" | "deep";
+  issues: number;
+}
+
+export interface DiffIssue {
+  id: string;
+  title: string;
+  severity: string;
+  category: string;
+}
+
+export interface DiffResult {
+  a: { generatedAt: string; overall: number; grade: string; mode: string };
+  b: { generatedAt: string; overall: number; grade: string; mode: string };
+  url: string;
+  overallDelta: number;
+  categories: { key: string; label: string; before: number | null; after: number | null; delta: number | null }[];
+  fixed: DiffIssue[];
+  added: DiffIssue[];
+  unchangedCount: number;
+}
+
+export async function fetchHistory(url: string): Promise<HistoryRun[]> {
+  if (!useRealBackend()) return [];
+  try {
+    const res = await fetch(new URL(`/api/history?url=${encodeURIComponent(url)}`, streamBase()).toString());
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchDiff(a: string, b: string): Promise<DiffResult | null> {
+  if (!useRealBackend()) return null;
+  try {
+    const res = await fetch(new URL(`/api/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`, streamBase()).toString());
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Server feature flags. In mock mode there is no server → deep is unavailable. */
 export async function fetchCapabilities(): Promise<{ deep: boolean }> {
   if (!useRealBackend()) return { deep: false };

@@ -426,6 +426,48 @@ async function main() {
     console.log("  (browser tests skipped — Playwright not installed)");
   }
 
+  console.log("history store + diff (PLAN-v2 §2):");
+  const store = require("../src/store");
+  const mkReport = (url, iso, overall, grade, issues, cats) => ({
+    meta: { finalUrl: url, startUrl: url, generatedAt: iso, mode: "static" },
+    score: { overall, grade, categories: cats },
+    issues,
+    pages: [],
+  });
+  await test("diffReports matches issues by id → fixed/added/unchanged + category deltas", () => {
+    const a = mkReport("https://x/", "2026-01-01T00:00:00.000Z", 72, "C",
+      [{ id: "seo.title.missing", title: "t", severity: "critical", category: "seo", affectedCount: 1, mode: "prevalence" }, { id: "a11y.img-alt.missing", title: "a", severity: "critical", category: "accessibility", affectedCount: 1, mode: "prevalence" }],
+      [{ key: "seo", label: "SEO", score: 60 }, { key: "accessibility", label: "Доступность", score: 50 }]);
+    const b = mkReport("https://x/", "2026-02-01T00:00:00.000Z", 81, "B",
+      [{ id: "a11y.img-alt.missing", title: "a", severity: "critical", category: "accessibility", affectedCount: 1, mode: "prevalence" }, { id: "perf.no-compression", title: "p", severity: "warning", category: "performance", affectedCount: 1, mode: "prevalence" }],
+      [{ key: "seo", label: "SEO", score: 90 }, { key: "accessibility", label: "Доступность", score: 50 }]);
+    const d = store.diffReports(a, b);
+    assert.strictEqual(d.overallDelta, 9);
+    assert.deepStrictEqual(d.fixed.map((i) => i.id), ["seo.title.missing"]);
+    assert.deepStrictEqual(d.added.map((i) => i.id), ["perf.no-compression"]);
+    assert.strictEqual(d.unchangedCount, 1);
+    assert.strictEqual(d.categories.find((c) => c.key === "seo").delta, 30);
+  });
+  await test("store idToFile refuses path traversal", () => {
+    assert.strictEqual(store.idToFile("../../etc/passwd"), null);
+    assert.strictEqual(store.idToFile("../secrets"), null);
+    assert.ok(String(store.idToFile("host.ru/2026-01-01")).startsWith(store.DATA_DIR));
+  });
+  await test("store save → list → get roundtrip (credentials scrubbed)", async () => {
+    const rep = mkReport("https://store-test-xyz.example/", "2026-03-03T03:03:03.003Z", 55, "F",
+      [{ id: "seo.title.missing", title: "t", severity: "critical", category: "seo", affectedCount: 1, mode: "prevalence" }],
+      [{ key: "seo", label: "SEO", score: 40 }]);
+    rep.meta.cookie = "secret=123";
+    const id = await store.saveAudit(rep);
+    assert.ok(id && id.includes("store-test-xyz.example"), "bad id " + id);
+    const hist = await store.listHistory("https://store-test-xyz.example/");
+    assert.ok(hist.some((h) => h.id === id && h.overall === 55));
+    const got = await store.getAudit(id);
+    assert.ok(got && got.score.overall === 55);
+    assert.strictEqual(got.meta.cookie, undefined, "cookie must be scrubbed");
+    require("fs").rmSync(require("path").join(store.DATA_DIR, "store-test-xyz.example"), { recursive: true, force: true });
+  });
+
   console.log("backend (server.js SSE wire format):");
   const engine = createEngineServer();
   await new Promise((r) => engine.listen(0, "127.0.0.1", r));
@@ -463,6 +505,17 @@ async function main() {
     });
   }
 
+  function getJson(url) {
+    return new Promise((resolve) => {
+      http.get(url, (r) => { let s = ""; r.setEncoding("utf8"); r.on("data", (d) => (s += d)); r.on("end", () => { let body = null; try { body = JSON.parse(s); } catch (_) { /* noop */ } resolve({ status: r.statusCode, body }); }); });
+    });
+  }
+  await test("history endpoints wired: empty history [] , missing report/diff → 404", async () => {
+    const hist = await getJson(`http://127.0.0.1:${ePort}/api/history?url=${encodeURIComponent("https://no-such-host-xyz.example/")}`);
+    assert.ok(Array.isArray(hist.body) && hist.body.length === 0, "history should be empty array");
+    assert.strictEqual((await getJson(`http://127.0.0.1:${ePort}/api/report?id=nope/nope`)).status, 404);
+    assert.strictEqual((await getJson(`http://127.0.0.1:${ePort}/api/diff?a=nope/a&b=nope/b`)).status, 404);
+  });
   await test("SSE emits meta → progress → done with a contract-valid report", async () => {
     const evs = await collectSSE(`http://127.0.0.1:${ePort}/api/audit/stream?url=${encodeURIComponent(base + "/")}&allowLocal=true&limit=5`);
     const types = evs.map((e) => e.event);

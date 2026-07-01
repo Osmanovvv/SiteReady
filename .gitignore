@@ -20,5 +20,8 @@ Thumbs.db
 # Machine-local tooling state
 .claude/*.lock
 
+# Audit history (local data, PLAN-v2 §2)
+data/
+
 # Note: web/dist IS tracked on purpose — the engine serves it, so `node server.js`
 # runs the app with no build step. Rebuild with: cd web && npm run build
