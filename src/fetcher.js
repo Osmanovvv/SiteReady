@@ -131,8 +131,8 @@ function rawRequest(urlObj, { method, timeout, allowPrivate, extraHeaders }) {
     assertHostAllowed(urlObj, allowPrivate);
     const mod = urlObj.protocol === "https:" ? https : http;
     const ac = new AbortController();
-    // HARD total-time deadline (independent of socket activity) — a slow-drip
-    // server cannot hold the socket past `timeout`.
+    // Abort at the caller's REMAINING time budget (independent of socket activity),
+    // so a slow-drip server cannot hold the socket past the shared total deadline.
     const hard = setTimeout(() => ac.abort(), timeout);
     const startBig = process.hrtime.bigint();
     const req = mod.request(
@@ -174,18 +174,25 @@ async function fetch(rawUrl, opts = {}) {
   const visited = new Set();
   let hops = 0;
   const totalStart = process.hrtime.bigint();
+  // HARD total-time budget shared across ALL redirect hops (not reset per hop),
+  // so a slow redirect chain cannot multiply the caller's timeout.
+  const deadline = Date.now() + o.timeout;
 
-  // Auth (cookie/headers) is sent ONLY to the origin it was issued for. If a redirect
-  // crosses origin, the credentials are dropped — never leak them to another host.
+  // Auth (cookie/headers) is sent ONLY to the START origin it was issued for — pinned
+  // by the caller (o.authOrigin), NOT recomputed per request. Origin includes the
+  // SCHEME, so a same-host link that downgrades https→http (or any cross-origin
+  // redirect) fails the check and the credentials are dropped — never leaked.
   const authHeaders = buildAuthHeaders(o.auth);
-  const authOrigin = urlObj.origin;
+  const authOrigin = o.authOrigin || urlObj.origin;
 
   while (true) {
     if (visited.has(urlObj.href)) throw makeError(`Redirect loop at ${urlObj.href}`, "REDIRECT_LOOP");
     visited.add(urlObj.href);
 
     const extraHeaders = urlObj.origin === authOrigin ? authHeaders : null;
-    const { res, ttfbMs, ac, hard } = await rawRequest(urlObj, { method, timeout: o.timeout, allowPrivate, extraHeaders });
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw makeError("Request exceeded time budget", "TIMEOUT");
+    const { res, ttfbMs, ac, hard } = await rawRequest(urlObj, { method, timeout: remaining, allowPrivate, extraHeaders });
     const status = res.statusCode;
     const headers = res.headers;
 

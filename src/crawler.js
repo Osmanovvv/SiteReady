@@ -95,7 +95,9 @@ async function crawl(startUrl, opts = {}) {
 
     let res;
     try {
-      res = await fetch(url, { allowPrivate, timeout, auth });
+      // Pin auth to the immutable start origin (scheme+host+port). A discovered
+      // same-host link that downgrades to http:// then gets NO credentials.
+      res = await fetch(url, { allowPrivate, timeout, auth, authOrigin: start.origin });
     } catch (e) {
       if (results.length < maxPages) {
         results.push({ url, finalUrl: url, status: 0, error: e.code || "UNREACHABLE", redirectChain: [], page: null });
