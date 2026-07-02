@@ -249,7 +249,7 @@ function lowerHeaders(headers) {
 }
 
 async function deepCrawl(startUrl, opts = {}) {
-  const { maxPages = 10, allowPrivate = false, auth = null, onProgress = null, signal = null, timeout = 25000 } = opts;
+  const { maxPages = 10, allowPrivate = false, auth = null, onProgress = null, signal = null, timeout = 25000, concurrency = 3 } = opts;
 
   let start;
   try {
@@ -302,10 +302,10 @@ async function deepCrawl(startUrl, opts = {}) {
     const results = [];
     const crawledFinal = new Set();
     let discovered = 1;
+    let active = 0;
 
-    while (queue.length && results.length < maxPages) {
-      if (signal && signal()) break;
-      const url = queue.shift();
+    async function processOne(url) {
+      if (signal && signal()) return;
       if (onProgress) onProgress({ crawled: results.length, discovered, current: url });
       let rec = isDocLink(url)
         ? await probeStatic(url, { allowPrivate, timeout })
@@ -317,11 +317,13 @@ async function deepCrawl(startUrl, opts = {}) {
         if (alt.status > 0) rec = alt;
       }
       // Dedup by resolved final URL so redirect aliases aren't rendered/recorded twice.
+      // has→add has no await between them, so it's atomic across concurrent workers.
       let finalKey = url;
       try { finalKey = canonicalize(new URL(rec.finalUrl)); } catch (_) { /* keep url */ }
-      if (crawledFinal.has(finalKey)) continue;
+      if (crawledFinal.has(finalKey)) return;
       crawledFinal.add(finalKey);
       if (finalKey !== url) seen.add(finalKey);
+      if (results.length >= maxPages) return; // hard cap holds under concurrency
       results.push(rec);
 
       if (rec.page) {
@@ -344,6 +346,26 @@ async function deepCrawl(startUrl, opts = {}) {
         }
       }
     }
+
+    // Bounded pool of concurrent renders (each renderOne opens its own tab). Serial
+    // rendering was the deep-mode bottleneck; the egress guard is per-request and the
+    // dedup/cap sections are atomic between awaits, so this stays correct.
+    async function worker() {
+      while (results.length < maxPages) {
+        if (signal && signal()) return;
+        const url = queue.shift();
+        if (url === undefined) {
+          if (active === 0) return; // queue empty and no in-flight render can still enqueue
+          await new Promise((r) => setTimeout(r, 10));
+          continue;
+        }
+        active += 1; // reserved synchronously with the shift, before any await
+        try { await processOne(url); } finally { active -= 1; }
+      }
+    }
+    const workers = [];
+    for (let i = 0; i < Math.max(1, concurrency); i += 1) workers.push(worker());
+    await Promise.all(workers);
 
     if (onProgress) onProgress({ crawled: results.length, discovered, current: null, phase: "done" });
     return {

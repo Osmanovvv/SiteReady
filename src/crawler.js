@@ -75,7 +75,6 @@ async function crawl(startUrl, opts = {}) {
   const results = [];
   let discovered = 1;
   let active = 0;
-  let lastHit = 0;
   let totalBytes = 0;
   let budgetExceeded = false; // tripped when the aggregate byte budget is spent
 
@@ -85,12 +84,6 @@ async function crawl(startUrl, opts = {}) {
 
   async function processOne(url) {
     if ((signal && signal()) || budgetExceeded) return;
-    // Serialize requests to one host with a throttle + jitter (be polite).
-    const now = Date.now();
-    const wait = Math.max(0, lastHit + throttleMs + Math.floor(Math.random() * 80) - now);
-    lastHit = now + wait;
-    if (wait) await delay(wait);
-
     emit(url);
 
     let res;
@@ -149,12 +142,15 @@ async function crawl(startUrl, opts = {}) {
       ttfbMs: res.ttfbMs,
       bytes: res.bytes,
       contentType: res.contentType,
+      contentEncoding: res.contentEncoding, // needed by perf.no-compression (deep records already carry it)
       page,
       error: null,
     });
   }
 
   async function worker() {
+    let lastHit = 0; // per-worker politeness: each worker spaces out its OWN requests,
+    // so `concurrency` requests run truly in parallel (a global throttle used to serialize them all).
     while (results.length < maxPages && !budgetExceeded) {
       if (signal && signal()) return;
       const url = queue.shift();
@@ -163,8 +159,14 @@ async function crawl(startUrl, opts = {}) {
         await delay(5);
         continue;
       }
-      active += 1;
-      try { await processOne(url); } finally { active -= 1; }
+      active += 1; // reserved BEFORE the throttle wait, so peers don't see active===0 and quit early
+      try {
+        const now = Date.now();
+        const wait = Math.max(0, lastHit + throttleMs + Math.floor(Math.random() * 80) - now);
+        lastHit = now + wait;
+        if (wait) await delay(wait);
+        await processOne(url);
+      } finally { active -= 1; }
     }
   }
 
