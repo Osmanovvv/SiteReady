@@ -16,6 +16,27 @@ const UA = "Mozilla/5.0 (compatible; SiteReadyBot/1.0; +https://siteready.local/
 const DEFAULTS = { timeout: 15000, maxHops: 5, maxBytes: 8 * 1024 * 1024 };
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
+// Keep-alive connection pools: reuse TCP/TLS sockets across same-host requests so a
+// multi-page crawl doesn't pay a fresh handshake per page.
+//
+// SSRF SAFETY: the egress guard for DNS-name hosts lives in makeLookup(allowPrivate),
+// which Node only invokes when opening a NEW socket — a reused socket skips it. Node
+// also keys pooled sockets by host:port only (NOT by allowPrivate). So we MUST keep two
+// separate pools by trust level: a socket first validated under allowPrivate=true must
+// never be handed to an allowPrivate=false request, or a permissive audit could prime a
+// private/metadata socket that a later blocked audit silently reuses. Within one pool
+// reuse is safe — the pinned IP was already validated under that exact policy (reusing a
+// pinned public IP also keeps the DNS-rebinding window closed).
+const AGENT_OPTS = { keepAlive: true, keepAliveMsecs: 15000, maxSockets: 8, maxFreeSockets: 4, scheduling: "lifo" };
+const POOLS = {
+  strict: { http: new http.Agent(AGENT_OPTS), https: new https.Agent(AGENT_OPTS) }, // allowPrivate=false
+  local: { http: new http.Agent(AGENT_OPTS), https: new https.Agent(AGENT_OPTS) },  // allowPrivate=true
+};
+function pickAgent(protocol, allowPrivate) {
+  const pool = allowPrivate ? POOLS.local : POOLS.strict;
+  return protocol === "https:" ? pool.https : pool.http;
+}
+
 function elapsedMs(startBig) {
   return Number(process.hrtime.bigint() - startBig) / 1e6;
 }
@@ -141,6 +162,7 @@ function rawRequest(urlObj, { method, timeout, allowPrivate, extraHeaders }) {
         method,
         signal: ac.signal,
         lookup: makeLookup(allowPrivate),
+        agent: pickAgent(urlObj.protocol, allowPrivate),
         headers: {
           "User-Agent": UA,
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -268,4 +290,4 @@ function decodeBody(buffer, contentType) {
   }
 }
 
-module.exports = { fetch, decodeBody, detectCharset, UA };
+module.exports = { fetch, decodeBody, detectCharset, UA, pickAgent };
