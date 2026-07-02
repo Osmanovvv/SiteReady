@@ -293,6 +293,16 @@ async function main() {
       assert.throws(() => assertHostAllowed(new URL(u), false), (e) => e.code === "SSRF_BLOCKED", u);
     }
   });
+  await test("keep-alive pools are segregated by trust level — no cross-policy socket reuse (SSRF-safe)", () => {
+    const { pickAgent } = require("../src/fetcher");
+    // A socket opened under allowPrivate=true must never be reused by an allowPrivate=false
+    // request (reuse skips makeLookup). Different agent per policy makes that impossible.
+    assert.notStrictEqual(pickAgent("http:", true), pickAgent("http:", false), "http shares an agent across policies");
+    assert.notStrictEqual(pickAgent("https:", true), pickAgent("https:", false), "https shares an agent across policies");
+    // ...but stable within a policy, so keep-alive reuse still works.
+    assert.strictEqual(pickAgent("http:", false), pickAgent("http:", false));
+    assert.strictEqual(pickAgent("https:", true), pickAgent("https:", true));
+  });
 
   console.log("decompression (deflate / raw-deflate / brotli):");
   await test("zlib-wrapped deflate decodes", async () => { const r = await fetch(base + "/deflate", AP); assert.ok(decodeBody(r.body, r.contentType).includes("Zlib deflate работает")); });
@@ -313,6 +323,16 @@ async function main() {
     const dt = Date.now() - t0;
     assert.strictEqual(code, "TIMEOUT", "expected a shared-deadline TIMEOUT across the redirect chain");
     assert.ok(dt < 950, "should abort near the 700ms total budget, took " + dt + "ms");
+  });
+  await test("static crawl carries contentEncoding → no false 'no compression' on a gzipped page", async () => {
+    // The static crawler dropped res.contentEncoding from the page record, so perf.no-compression
+    // fired on EVERY page — even ones served gzip/br. Verify the field survives and the check is right.
+    const c = await crawl(base + "/gzip", { allowPrivate: true, maxPages: 1 });
+    assert.strictEqual(c.pages[0].contentEncoding, "gzip", "static page record must carry contentEncoding");
+    const gz = await audit(base + "/gzip", { allowPrivate: true, maxPages: 1 });
+    assert.ok(!gz.issues.some((i) => i.id === "perf.no-compression"), "false 'no compression' on a gzip page");
+    const plain = await audit(base + "/about.html", { allowPrivate: true, maxPages: 1 });
+    assert.ok(plain.issues.some((i) => i.id === "perf.no-compression"), "a truly uncompressed page must still be flagged");
   });
 
   console.log("reachability gate (dead site ≠ A):");
@@ -449,6 +469,13 @@ async function main() {
       const c = await deepCrawl(base + "/about.html", { allowPrivate: true, maxPages: 1, timeout: 20000 });
       const p = c.pages[0];
       assert.ok(p.page && typeof p.contentType === "string" && typeof p.bytes === "number" && p.status === 200);
+    });
+    await test("[deep] concurrent render respects maxPages cap and never double-records a page", async () => {
+      // /hub links 30 nodes; with concurrency the cap and dedup must still hold exactly.
+      const c = await deepCrawl(base + "/hub", { allowPrivate: true, maxPages: 6, concurrency: 3, timeout: 20000 });
+      assert.ok(c.pagesCrawled <= 6, "cap exceeded under concurrency: " + c.pagesCrawled);
+      const urls = c.pages.map((p) => p.url);
+      assert.strictEqual(urls.length, new Set(urls).size, "a page was recorded twice under concurrency");
     });
     await test("[deep] JS-error page → tech.js-error (uncaught) + tech.js-console", async () => {
       const r = await audit(base + "/js-error", { deep: true, allowPrivate: true, maxPages: 1 });
